@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     APP_TITLE: str = "Dopamine API"
     APP_VERSION: str = "1.0.0"
+    NAVER_CLIENT_ID: str = ""
+    NAVER_CLIENT_SECRET: str = ""
 
     class Config:
         env_file = ".env"
