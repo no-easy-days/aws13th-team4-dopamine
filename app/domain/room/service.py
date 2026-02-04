@@ -1,4 +1,6 @@
 import random
+import secrets
+from datetime import datetime
 from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -224,49 +226,66 @@ class RoomService:
 
     def set_ready(self, db: Session, user_id: int, room_id: int, is_ready: bool) -> Tuple[ParticipantResponse, Optional[GameResult]]:
         """레디 상태 변경. 정원이 다 차면 자동으로 사다리타기 시작."""
-        room = self.room_repository.get_by_id(db, room_id)
-        if not room:
-            raise NotFoundException(message="Room not found")
+        try:
+            # 비관적 락으로 방 조회 (동시성 제어)
+            room = self.room_repository.get_by_id_for_update(db, room_id)
+            if not room:
+                raise NotFoundException(message="Room not found")
 
-        if room.status != "OPEN":
-            raise BadRequestException(message="Room is not open")
+            if room.status != "OPEN":
+                raise BadRequestException(message="Room is not open")
 
-        # 참여자인지 확인
-        participant = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
-        if not participant or participant.state != "JOINED":
-            raise BadRequestException(message="Not a participant")
+            # 참여자인지 확인
+            participant = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
+            if not participant or participant.state != "JOINED":
+                raise BadRequestException(message="Not a participant")
 
-        # 레디하려는 경우 정원 체크
-        if is_ready and not participant.is_ready:
-            ready_count = self.participant_repository.count_ready(db, room_id)
-            if ready_count >= room.max_participants:
-                raise BadRequestException(message="Ready slots are full")
+            # 레디하려는 경우 정원 체크 (락이 걸린 상태에서 카운트)
+            if is_ready and not participant.is_ready:
+                ready_count = self.participant_repository.count_ready(db, room_id)
+                if ready_count >= room.max_participants:
+                    raise BadRequestException(message="Ready slots are full")
 
-        # 레디 상태 변경
-        participant = self.participant_repository.update_ready(db, participant, is_ready)
+            # 레디 상태 변경 (commit 없이 flush만)
+            participant.is_ready = is_ready
+            db.flush()
 
-        # 정원이 다 찼는지 확인 후 자동 시작
-        game_result = None
-        if is_ready:
-            ready_count = self.participant_repository.count_ready(db, room_id)
-            if ready_count >= room.max_participants:
-                game_result = self._start_ladder_game(db, room)
+            # 정원이 다 찼는지 확인 후 자동 시작
+            game_result = None
+            if is_ready:
+                ready_count = self.participant_repository.count_ready(db, room_id)
+                if ready_count >= room.max_participants:
+                    # 방 상태를 DONE으로 변경 (이미 락이 걸려있음)
+                    room.status = "DONE"
+                    db.flush()
+                    game_result = self._start_ladder_game_internal(db, room)
 
-        return ParticipantResponse.model_validate(participant), game_result
+            # 모든 작업 완료 후 커밋
+            db.commit()
+            db.refresh(participant)
 
-    def _start_ladder_game(self, db: Session, room: Room) -> GameResult:
-        """사다리타기 게임 시작 및 결과 생성"""
+            return ParticipantResponse.model_validate(participant), game_result
+
+        except (NotFoundException, BadRequestException, ForbiddenException):
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise BadRequestException(message="Failed to update ready status") from e
+
+    def _start_ladder_game_internal(self, db: Session, room: Room) -> GameResult:
+        """사다리타기 게임 시작 및 결과 생성 (트랜잭션 내부용 - commit 없음)"""
         # 레디한 참여자 목록
         participants = self.participant_repository.list_by_room(db, room.id, state="JOINED")
         ready_participants = [p for p in participants if p.is_ready]
 
-        # Game 생성
-        game = self.game_repository.create(db, room_id=room.id)
+        # Game 생성 (commit 없이)
+        game = self._create_game_internal(db, room.id)
 
         if room.room_type == "WISHLIST_GIFT":
             # WISHLIST_GIFT: 랜덤으로 당첨자(payer) 선정, recipient는 방장
             payer = random.choice(ready_participants)
-            game_result = self.game_result_repository.create(
+            game_result = self._create_game_result_internal(
                 db,
                 game_id=game.id,
                 product_id=room.product_id,
@@ -276,7 +295,7 @@ class RoomService:
         else:
             # PRODUCT_LADDER: 랜덤으로 당첨자(recipient) 선정, 나머지는 payer
             winner = random.choice(ready_participants)
-            game_result = self.game_result_repository.create(
+            game_result = self._create_game_result_internal(
                 db,
                 game_id=game.id,
                 product_id=room.product_id,
@@ -285,12 +304,54 @@ class RoomService:
             )
             # 당첨자 제외 나머지를 payer로 등록
             loser_user_ids = [p.user_id for p in ready_participants if p.user_id != winner.user_id]
-            self.game_payer_repository.create_bulk(db, game_result.id, loser_user_ids)
-
-        # 방 상태 변경
-        self.room_repository.update_status(db, room, "DONE")
+            self._create_game_payers_internal(db, game_result.id, loser_user_ids)
 
         return game_result
+
+    def _create_game_internal(self, db: Session, room_id: int) -> Game:
+        """Game 생성 (트랜잭션 내부용 - commit 없음)"""
+        now = datetime.utcnow()
+        game = Game(
+            room_id=room_id,
+            status="DONE",
+            started_at=now,
+            ended_at=now,
+            seed=secrets.token_hex(32),
+        )
+        db.add(game)
+        db.flush()
+        return game
+
+    def _create_game_result_internal(
+        self,
+        db: Session,
+        game_id: int,
+        product_id: int,
+        recipient_user_id: int,
+        payer_user_id: Optional[int] = None,
+    ) -> GameResult:
+        """GameResult 생성 (트랜잭션 내부용 - commit 없음)"""
+        result = GameResult(
+            game_id=game_id,
+            product_id=product_id,
+            recipient_user_id=recipient_user_id,
+            payer_user_id=payer_user_id,
+            payment_status="PENDING",
+        )
+        db.add(result)
+        db.flush()
+        return result
+
+    def _create_game_payers_internal(self, db: Session, game_result_id: int, user_ids: list[int]) -> None:
+        """GamePayer 벌크 생성 (트랜잭션 내부용 - commit 없음)"""
+        for user_id in user_ids:
+            payer = GamePayer(
+                game_result_id=game_result_id,
+                user_id=user_id,
+                payment_status="PENDING",
+            )
+            db.add(payer)
+        db.flush()
 
     def leave_room(self, db: Session, user_id: int, room_id: int) -> None:
         """방 나가기 (레디한 사람만 가능)"""
