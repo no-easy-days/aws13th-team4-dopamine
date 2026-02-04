@@ -15,8 +15,8 @@
 ### 1. 저장소 클론
 
 ```bash
-git clone https://github.com/your-org/aws13th-team1-dopamine.git
-cd aws13th-team1-dopamine
+git clone https://github.com/your-org/aws13th-team4-dopamine.git
+cd aws13th-team4-dopamine
 ```
 
 ### 2. 가상환경 설정
