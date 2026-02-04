@@ -6,7 +6,7 @@ from app.core.exceptions import BadRequestException, ForbiddenException, NotFoun
 from app.domain.friend.repository import FriendRepository
 from app.domain.room.models import Room
 from app.domain.room.repository import RoomRepository, RoomParticipantRepository
-from app.domain.room.schemas import RoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse
+from app.domain.room.schemas import RoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest
 from app.domain.wishlist.models import WishlistItem
 
 
@@ -142,6 +142,24 @@ class RoomService:
 
         # 입장
         participant = self.participant_repository.create(db, room_id, user_id, role="MEMBER")
+        return ParticipantResponse.model_validate(participant)
+
+    def set_ready(self, db: Session, user_id: int, room_id: int, is_ready: bool) -> ParticipantResponse:
+        """레디 상태 변경"""
+        room = self.room_repository.get_by_id(db, room_id)
+        if not room:
+            raise NotFoundException(message="Room not found")
+
+        if room.status != "OPEN":
+            raise BadRequestException(message="Room is not open")
+
+        # 참여자인지 확인
+        participant = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
+        if not participant or participant.state != "JOINED":
+            raise BadRequestException(message="Not a participant")
+
+        # 레디 상태 변경
+        participant = self.participant_repository.update_ready(db, participant, is_ready)
         return ParticipantResponse.model_validate(participant)
 
     def delete_room(self, db: Session, user_id: int, room_id: int) -> None:

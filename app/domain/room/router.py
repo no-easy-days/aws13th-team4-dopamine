@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.common.schemas import BaseResponse
 from app.core.database import get_db
 from app.core.exceptions import UnauthorizedException
-from app.domain.room.schemas import RoomCreate, RoomResponse, RoomDetailResponse, ParticipantResponse
+from app.domain.room.schemas import RoomCreate, RoomResponse, RoomDetailResponse, ParticipantResponse, ReadyRequest
 from app.domain.room.service import RoomService
 
 router = APIRouter()
@@ -80,6 +80,18 @@ def join_room(
 ):
     """방 입장"""
     participant = service.join_room(db, user_id=user_id, room_id=room_id)
+    return BaseResponse.ok(participant)
+
+
+@router.patch("/{room_id}/ready", response_model=BaseResponse[ParticipantResponse])
+def set_ready(
+    room_id: int,
+    payload: ReadyRequest,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """레디 상태 변경"""
+    participant = service.set_ready(db, user_id=user_id, room_id=room_id, is_ready=payload.is_ready)
     return BaseResponse.ok(participant)
 
 
