@@ -72,9 +72,10 @@ class ReadyRequest(BaseModel):
 
 class GameResultInfo(BaseModel):
     game_id: int
-    payer_user_id: int
+    payer_user_id: Optional[int] = None  # 참여자만 볼 수 있음
     recipient_user_id: int
     product_id: int
+    participant_user_ids: List[int] = []  # 방장은 참여자 목록만 볼 수 있음
 
 
 class ReadyResponse(BaseModel):

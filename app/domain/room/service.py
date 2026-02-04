@@ -86,12 +86,31 @@ class RoomService:
             if game:
                 game_result = self.game_result_repository.get_by_game(db, game.id)
                 if game_result:
-                    response.game_result = GameResultInfo(
-                        game_id=game_result.game_id,
-                        payer_user_id=game_result.payer_user_id,
-                        recipient_user_id=game_result.recipient_user_id,
-                        product_id=game_result.product_id,
-                    )
+                    # 레디한 참여자 목록
+                    ready_participants = [p for p in participants if p.is_ready]
+                    participant_user_ids = [p.user_id for p in ready_participants]
+
+                    # 방장(선물 받는 사람)인지 확인
+                    is_recipient = user_id == room.gift_owner_user_id
+
+                    if is_recipient:
+                        # 방장: 참여자 목록만 보임, 당첨자는 숨김
+                        response.game_result = GameResultInfo(
+                            game_id=game_result.game_id,
+                            payer_user_id=None,
+                            recipient_user_id=game_result.recipient_user_id,
+                            product_id=game_result.product_id,
+                            participant_user_ids=participant_user_ids,
+                        )
+                    else:
+                        # 참여자: 당첨자만 보임
+                        response.game_result = GameResultInfo(
+                            game_id=game_result.game_id,
+                            payer_user_id=game_result.payer_user_id,
+                            recipient_user_id=game_result.recipient_user_id,
+                            product_id=game_result.product_id,
+                            participant_user_ids=[],
+                        )
 
         return response
 
