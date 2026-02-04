@@ -67,3 +67,16 @@ class RoomListResponse(BaseModel):
 
 class ReadyRequest(BaseModel):
     is_ready: bool = Field(..., description="레디 상태")
+
+
+class GameResultInfo(BaseModel):
+    game_id: int
+    payer_user_id: int
+    recipient_user_id: int
+    product_id: int
+
+
+class ReadyResponse(BaseModel):
+    participant: ParticipantResponse
+    game_started: bool = False
+    game_result: Optional[GameResultInfo] = None

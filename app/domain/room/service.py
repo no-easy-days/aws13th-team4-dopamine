@@ -1,9 +1,12 @@
-from typing import List
+import random
+from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundException
 from app.domain.friend.repository import FriendRepository
+from app.domain.game.models import Game, GameResult
+from app.domain.game.repository import GameRepository, GameResultRepository
 from app.domain.room.models import Room
 from app.domain.room.repository import RoomRepository, RoomParticipantRepository
 from app.domain.room.schemas import RoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest
@@ -16,10 +19,14 @@ class RoomService:
         room_repository: RoomRepository | None = None,
         participant_repository: RoomParticipantRepository | None = None,
         friend_repository: FriendRepository | None = None,
+        game_repository: GameRepository | None = None,
+        game_result_repository: GameResultRepository | None = None,
     ) -> None:
         self.room_repository = room_repository or RoomRepository()
         self.participant_repository = participant_repository or RoomParticipantRepository()
         self.friend_repository = friend_repository or FriendRepository()
+        self.game_repository = game_repository or GameRepository()
+        self.game_result_repository = game_result_repository or GameResultRepository()
 
     def create_room(self, db: Session, user_id: int, payload: RoomCreate) -> RoomResponse:
         """위시리스트 아이템으로 방 생성"""
@@ -139,8 +146,8 @@ class RoomService:
         participant = self.participant_repository.create(db, room_id, user_id, role="MEMBER")
         return ParticipantResponse.model_validate(participant)
 
-    def set_ready(self, db: Session, user_id: int, room_id: int, is_ready: bool) -> ParticipantResponse:
-        """레디 상태 변경"""
+    def set_ready(self, db: Session, user_id: int, room_id: int, is_ready: bool) -> Tuple[ParticipantResponse, Optional[GameResult]]:
+        """레디 상태 변경. 정원이 다 차면 자동으로 사다리타기 시작."""
         room = self.room_repository.get_by_id(db, room_id)
         if not room:
             raise NotFoundException(message="Room not found")
@@ -161,7 +168,41 @@ class RoomService:
 
         # 레디 상태 변경
         participant = self.participant_repository.update_ready(db, participant, is_ready)
-        return ParticipantResponse.model_validate(participant)
+
+        # 정원이 다 찼는지 확인 후 자동 시작
+        game_result = None
+        if is_ready:
+            ready_count = self.participant_repository.count_ready(db, room_id)
+            if ready_count >= room.max_participants:
+                game_result = self._start_ladder_game(db, room)
+
+        return ParticipantResponse.model_validate(participant), game_result
+
+    def _start_ladder_game(self, db: Session, room: Room) -> GameResult:
+        """사다리타기 게임 시작 및 결과 생성"""
+        # 레디한 참여자 목록
+        participants = self.participant_repository.list_by_room(db, room.id, state="JOINED")
+        ready_participants = [p for p in participants if p.is_ready]
+
+        # 랜덤으로 당첨자(payer) 선정
+        payer = random.choice(ready_participants)
+
+        # Game 생성
+        game = self.game_repository.create(db, room_id=room.id)
+
+        # GameResult 생성
+        game_result = self.game_result_repository.create(
+            db,
+            game_id=game.id,
+            product_id=room.product_id,
+            recipient_user_id=room.gift_owner_user_id,  # 선물 받는 사람 = 방장
+            payer_user_id=payer.user_id,  # 당첨자 = 선물 사는 사람
+        )
+
+        # 방 상태 변경
+        self.room_repository.update_status(db, room, "DONE")
+
+        return game_result
 
     def leave_room(self, db: Session, user_id: int, room_id: int) -> None:
         """방 나가기 (레디한 사람만 가능)"""
