@@ -3,9 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.exceptions import BaseAPIException, api_exception_handler
-
-# Import domain routers here
-# from app.domain.user.router import router as user_router
+from app.domain.friend.router import router as friend_router
+from app.domain.wishlist.router import router as wishlist_router
 
 
 def create_app() -> FastAPI:
@@ -34,7 +33,8 @@ def create_app() -> FastAPI:
         return {"status": "healthy"}
 
     # Register routers
-    # app.include_router(user_router, prefix="/api/v1/users", tags=["users"])
+    app.include_router(friend_router, prefix="/api/v1/friends", tags=["friends"])
+    app.include_router(wishlist_router, prefix="/api/v1/wishlist", tags=["wishlist"])
 
     return app
 
