@@ -3,12 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.product import schemas
-from app.product.service import NaverShoppingService
-from app.product.repository import ProductRepository
+from app.domain.product import schemas
+from app.domain.product.service import NaverShoppingService
+from app.domain.product.repository import ProductRepository
 
 router = APIRouter(
-    prefix="/products",
+    prefix="/api/v1/products",
     tags=["Products"]
 )
 

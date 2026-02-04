@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from app.product.models import Product
+from app.domain.product.models import Product
 
 
 class ProductRepository:
