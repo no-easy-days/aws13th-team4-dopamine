@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.common.schemas import BaseResponse
 from app.core.database import get_db
 from app.core.exceptions import UnauthorizedException
-from app.domain.room.schemas import RoomCreate, RoomResponse, RoomDetailResponse, ParticipantResponse, ReadyRequest
+from app.domain.room.schemas import RoomCreate, RoomResponse, RoomDetailResponse, ParticipantResponse, ReadyRequest, ReadyResponse, GameResultInfo
 from app.domain.room.service import RoomService
 
 router = APIRouter()
@@ -83,16 +83,30 @@ def join_room(
     return BaseResponse.ok(participant)
 
 
-@router.patch("/{room_id}/ready", response_model=BaseResponse[ParticipantResponse])
+@router.patch("/{room_id}/ready", response_model=BaseResponse[ReadyResponse])
 def set_ready(
     room_id: int,
     payload: ReadyRequest,
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    """레디 상태 변경"""
-    participant = service.set_ready(db, user_id=user_id, room_id=room_id, is_ready=payload.is_ready)
-    return BaseResponse.ok(participant)
+    """레디 상태 변경. 정원이 다 차면 자동으로 사다리타기 시작."""
+    participant, game_result = service.set_ready(db, user_id=user_id, room_id=room_id, is_ready=payload.is_ready)
+
+    response = ReadyResponse(
+        participant=participant,
+        game_started=game_result is not None,
+    )
+
+    if game_result:
+        response.game_result = GameResultInfo(
+            game_id=game_result.game_id,
+            payer_user_id=game_result.payer_user_id,
+            recipient_user_id=game_result.recipient_user_id,
+            product_id=game_result.product_id,
+        )
+
+    return BaseResponse.ok(response)
 
 
 @router.post("/{room_id}/leave", response_model=BaseResponse[None])

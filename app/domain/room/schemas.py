@@ -46,6 +46,7 @@ class RoomDetailResponse(BaseModel):
     participants: List["ParticipantResponse"] = []
     current_participant_count: int = 0
     current_ready_count: int = 0
+    game_result: Optional["GameResultInfo"] = None
 
 
 class ParticipantResponse(BaseModel):
@@ -67,3 +68,17 @@ class RoomListResponse(BaseModel):
 
 class ReadyRequest(BaseModel):
     is_ready: bool = Field(..., description="레디 상태")
+
+
+class GameResultInfo(BaseModel):
+    game_id: int
+    payer_user_id: Optional[int] = None  # 참여자만 볼 수 있음
+    recipient_user_id: int
+    product_id: int
+    participant_user_ids: List[int] = []  # 방장은 참여자 목록만 볼 수 있음
+
+
+class ReadyResponse(BaseModel):
+    participant: ParticipantResponse
+    game_started: bool = False
+    game_result: Optional[GameResultInfo] = None
