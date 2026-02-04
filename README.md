@@ -259,7 +259,10 @@ git push origin feature/user-signup
 4. **Squash Merge**: 커밋 정리 후 머지
 
 ---
-
+## 브랜치 규칙
+ex ) feat/이슈넘버(pr넘버)/간단한 기능설명 (두단어 이하 영어로)
+feat/#1/changeLogin
+---
 ## 팀원
 
 | 이름 | 역할 | GitHub |
