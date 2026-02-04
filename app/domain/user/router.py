@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.common.schemas import BaseResponse  # 공통 응답 규격
 from app.domain.user.service import UserService
-from app.domain.user.schemas import UserCreate, UserResponse
+from app.domain.user.schemas import UserCreate, UserResponse, UserLogin, LoginResponse
 
 router = APIRouter()
 
@@ -38,3 +38,15 @@ async def signup(
         data=UserResponse.model_validate(new_user), 
         message="회원가입이 완료되었습니다."
     )
+
+@router.post(
+    "/login",
+    response_model=BaseResponse[LoginResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def login(
+    data: UserLogin,
+    service: UserService = Depends(get_service),
+) -> Any:
+    result = service.login(data)
+    return BaseResponse.ok(data=LoginResponse(**result), message="로그인 성공")

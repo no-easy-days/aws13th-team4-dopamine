@@ -1,6 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Column, BigInteger, DateTime, ForeignKey, UniqueConstraint
 from app.core.database import Base
+from app.domain.user.models import User  # noqa: F401  # ensure FK target is registered
 
 
 class Friend(Base):

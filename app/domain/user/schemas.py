@@ -79,3 +79,17 @@ class UserResponse(BaseModel):
     # [설정] ORM 모드 활성화
     # SQLAlchemy 객체(DB 모델)를 Pydantic 모델(JSON)로 변환할 수 있게 해줍니다.
     model_config = {"from_attributes": True}
+
+
+# =============================================================================
+
+# =============================================================================
+# [Login Schema]
+# =============================================================================
+class UserLogin(BaseModel):
+    email: EmailStr = Field(..., description="User email")
+    password: SecretStr = Field(..., min_length=8, max_length=50, description="Password")
+
+
+class LoginResponse(BaseModel):
+    user_id: int
