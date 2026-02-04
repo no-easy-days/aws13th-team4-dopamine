@@ -98,6 +98,18 @@ class RoomService:
         rooms = self.room_repository.list_open_rooms_for_friend(db, friend_user_ids)
         return [self._to_room_response(db, room) for room in rooms]
 
+    def list_rooms_by_friend(self, db: Session, user_id: int, friend_user_id: int) -> List[RoomResponse]:
+        """특정 친구의 OPEN 상태 방 목록"""
+        # 친구인지 확인
+        is_friend = self.friend_repository.get_by_owner_and_friend(
+            db, owner_user_id=user_id, friend_user_id=friend_user_id
+        )
+        if not is_friend:
+            raise ForbiddenException(message="Not a friend")
+
+        rooms = self.room_repository.list_by_friend(db, friend_user_id)
+        return [self._to_room_response(db, room) for room in rooms]
+
     def delete_room(self, db: Session, user_id: int, room_id: int) -> None:
         """방 삭제 (방장만 가능)"""
         room = self.room_repository.get_by_id(db, room_id)

@@ -50,6 +50,17 @@ def list_friend_rooms(
     return BaseResponse.ok(rooms)
 
 
+@router.get("/friends/{friend_user_id}", response_model=BaseResponse[List[RoomResponse]])
+def list_rooms_by_friend(
+    friend_user_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """특정 친구의 OPEN 상태 방 목록"""
+    rooms = service.list_rooms_by_friend(db, user_id=user_id, friend_user_id=friend_user_id)
+    return BaseResponse.ok(rooms)
+
+
 @router.get("/{room_id}", response_model=BaseResponse[RoomDetailResponse])
 def get_room_detail(
     room_id: int,

@@ -42,6 +42,20 @@ class RoomRepository:
         )
 
     @staticmethod
+    def list_by_friend(db: Session, friend_user_id: int) -> List[Room]:
+        """특정 친구의 OPEN 상태 방 목록 조회"""
+        return (
+            db.query(Room)
+            .filter(
+                Room.gift_owner_user_id == friend_user_id,
+                Room.status == "OPEN",
+                Room.room_type == "WISHLIST_GIFT",
+            )
+            .order_by(Room.created_at.desc())
+            .all()
+        )
+
+    @staticmethod
     def create(
         db: Session,
         room_type: str,
