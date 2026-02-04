@@ -1,76 +1,53 @@
-"""
-Template Repository - 데이터 접근 계층
-
-사용법:
-    1. 이 파일을 복사하여 실제 도메인의 repository.py 생성
-    2. 클래스명과 모델을 실제 도메인에 맞게 수정
-    3. 필요한 쿼리 메서드 추가
-"""
-
-from typing import Optional, List, Tuple
-from sqlalchemy import select, func
+from typing import Optional
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError  # DB 무결성 에러 감지
 
-from app.domain._template.models import Template
-from app.domain._template.schemas import TemplateCreate, TemplateUpdate
+from app.domain.user.models import User
+from app.domain.user import schemas
 
-
-class TemplateRepository:
+class UserRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id(self, template_id: int) -> Optional[Template]:
-        """ID로 단건 조회"""
-        return self.db.get(Template, template_id)
+    def create(self, user_create: schemas.UserCreate, hashed_password: str) -> User:
+        """
+        [회원 생성]
+        - 보안: **dict(언패킹)를 사용하지 않고 명시적으로 필드를 할당하여 의도치 않은 데이터 주입 방지
+        - 안정성: IntegrityError 처리를 통해 동시성 이슈(따닥 클릭) 및 중복 데이터 예외 처리
+        """
+        try:
+            # 1. 명시적 객체 생성 (Models.py의 password_hash 컬럼명 준수)
+            user = User(
+                email=user_create.email,
+                nickname=user_create.nickname,
+                password_hash=hashed_password
+            )
+            
+            # 2. DB 반영
+            self.db.add(user)
+            self.db.commit()      # 여기서 실제 저장 및 트랜잭션 종료
+            self.db.refresh(user) # 생성된 ID 및 기본값 로드
+            return user
+            
+        except IntegrityError as e:
+            # [트러블슈팅] 중복 가입 시 서버 터짐 방지 및 원인 파악
+            self.db.rollback()
+            error_msg = str(e.orig)
+            
+            if "email" in error_msg:
+                raise ValueError("이미 사용 중인 이메일입니다.")
+            elif "nickname" in error_msg:
+                raise ValueError("이미 사용 중인 닉네임입니다.")
+            else:
+                raise ValueError("데이터베이스 저장 중 오류가 발생했습니다.") from e
 
-    def get_list(
-        self,
-        offset: int = 0,
-        limit: int = 20,
-        is_active: Optional[bool] = None,
-    ) -> Tuple[List[Template], int]:
-        """목록 조회 (페이지네이션)"""
-        query = select(Template)
+    def get_by_email(self, email: str) -> Optional[User]:
+        """이메일로 회원 단건 조회 (SQLAlchemy 2.0 Style)"""
+        stmt = select(User).where(User.email == email)
+        return self.db.scalar(stmt)
 
-        # 필터 조건
-        if is_active is not None:
-            query = query.where(Template.is_active == is_active)
-
-        # 총 개수
-        count_query = select(func.count()).select_from(query.subquery())
-        total = self.db.scalar(count_query) or 0
-
-        # 페이지네이션 적용
-        query = query.order_by(Template.id.desc()).offset(offset).limit(limit)
-        items = list(self.db.scalars(query).all())
-
-        return items, total
-
-    def create(self, data: TemplateCreate) -> Template:
-        """생성"""
-        template = Template(**data.model_dump())
-        self.db.add(template)
-        self.db.commit()
-        self.db.refresh(template)
-        return template
-
-    def update(self, template: Template, data: TemplateUpdate) -> Template:
-        """수정"""
-        update_data = data.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(template, key, value)
-        self.db.commit()
-        self.db.refresh(template)
-        return template
-
-    def delete(self, template: Template) -> None:
-        """삭제"""
-        self.db.delete(template)
-        self.db.commit()
-
-    def exists_by_name(self, name: str, exclude_id: Optional[int] = None) -> bool:
-        """이름 중복 체크"""
-        query = select(Template.id).where(Template.name == name)
-        if exclude_id:
-            query = query.where(Template.id != exclude_id)
-        return self.db.scalar(query) is not None
+    def get_by_nickname(self, nickname: str) -> Optional[User]:
+        """닉네임으로 회원 단건 조회"""
+        stmt = select(User).where(User.nickname == nickname)
+        return self.db.scalar(stmt)
