@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.common.schemas import BaseResponse
 from app.core.database import get_db
 from app.core.exceptions import UnauthorizedException
-from app.domain.room.schemas import RoomCreate, RoomResponse, RoomDetailResponse
+from app.domain.room.schemas import RoomCreate, RoomResponse, RoomDetailResponse, ParticipantResponse
 from app.domain.room.service import RoomService
 
 router = APIRouter()
@@ -70,6 +70,17 @@ def get_room_detail(
     """방 상세 조회 (입장)"""
     room = service.get_room_detail(db, user_id=user_id, room_id=room_id)
     return BaseResponse.ok(room)
+
+
+@router.post("/{room_id}/join", response_model=BaseResponse[ParticipantResponse])
+def join_room(
+    room_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """방 입장"""
+    participant = service.join_room(db, user_id=user_id, room_id=room_id)
+    return BaseResponse.ok(participant)
 
 
 @router.delete("/{room_id}", response_model=BaseResponse[None])

@@ -110,6 +110,40 @@ class RoomService:
         rooms = self.room_repository.list_by_friend(db, friend_user_id)
         return [self._to_room_response(db, room) for room in rooms]
 
+    def join_room(self, db: Session, user_id: int, room_id: int) -> ParticipantResponse:
+        """방 입장"""
+        room = self.room_repository.get_by_id(db, room_id)
+        if not room:
+            raise NotFoundException(message="Room not found")
+
+        if room.status != "OPEN":
+            raise BadRequestException(message="Room is not open")
+
+        # 방장은 입장 불가
+        if room.owner_user_id == user_id:
+            raise BadRequestException(message="Owner cannot join as participant")
+
+        # 친구인지 확인
+        is_friend = self.friend_repository.get_by_owner_and_friend(
+            db, owner_user_id=user_id, friend_user_id=room.gift_owner_user_id
+        )
+        if not is_friend:
+            raise ForbiddenException(message="Only friends can join")
+
+        # 이미 참여했는지 확인
+        existing = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
+        if existing and existing.state == "JOINED":
+            raise BadRequestException(message="Already joined")
+
+        # 정원 확인
+        current_count = self.participant_repository.count_joined(db, room_id)
+        if current_count >= room.max_participants:
+            raise BadRequestException(message="Room is full")
+
+        # 입장
+        participant = self.participant_repository.create(db, room_id, user_id, role="MEMBER")
+        return ParticipantResponse.model_validate(participant)
+
     def delete_room(self, db: Session, user_id: int, room_id: int) -> None:
         """방 삭제 (방장만 가능)"""
         room = self.room_repository.get_by_id(db, room_id)
