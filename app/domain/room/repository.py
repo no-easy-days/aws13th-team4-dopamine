@@ -12,6 +12,11 @@ class RoomRepository:
         return db.query(Room).filter(Room.id == room_id).first()
 
     @staticmethod
+    def get_by_id_for_update(db: Session, room_id: int) -> Optional[Room]:
+        """동시성 제어를 위한 비관적 락 조회"""
+        return db.query(Room).filter(Room.id == room_id).with_for_update().first()
+
+    @staticmethod
     def get_by_join_code(db: Session, join_code: str) -> Optional[Room]:
         return db.query(Room).filter(Room.join_code == join_code).first()
 
@@ -104,6 +109,20 @@ class RoomRepository:
         return room
 
     @staticmethod
+    def update_status_if_open(db: Session, room_id: int, new_status: str) -> Optional[Room]:
+        """OPEN 상태인 경우에만 상태 변경 (동시성 제어)"""
+        room = (
+            db.query(Room)
+            .filter(Room.id == room_id, Room.status == "OPEN")
+            .with_for_update()
+            .first()
+        )
+        if room:
+            room.status = new_status
+            db.flush()  # 트랜잭션 내에서 반영
+        return room
+
+    @staticmethod
     def soft_delete(db: Session, room: Room) -> Room:
         from datetime import datetime
         room.status = "DELETED"
@@ -156,6 +175,21 @@ class RoomParticipantRepository:
             )
             .count()
         )
+
+    @staticmethod
+    def count_ready_for_update(db: Session, room_id: int) -> int:
+        """동시성 제어를 위한 레디 카운트 (비관적 락)"""
+        from sqlalchemy import func
+        return (
+            db.query(func.count(RoomParticipant.id))
+            .filter(
+                RoomParticipant.room_id == room_id,
+                RoomParticipant.state == "JOINED",
+                RoomParticipant.is_ready.is_(True),
+            )
+            .with_for_update()
+            .scalar()
+        ) or 0
 
     @staticmethod
     def create(db: Session, room_id: int, user_id: int, role: str) -> RoomParticipant:
