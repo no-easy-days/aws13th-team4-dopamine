@@ -4,7 +4,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.domain.game.models import Game, GameResult
+from app.domain.game.models import Game, GameResult, GamePayer
 
 
 class GameRepository:
@@ -49,7 +49,7 @@ class GameResultRepository:
         game_id: int,
         product_id: int,
         recipient_user_id: int,
-        payer_user_id: int,
+        payer_user_id: Optional[int] = None,
     ) -> GameResult:
         result = GameResult(
             game_id=game_id,
@@ -62,3 +62,39 @@ class GameResultRepository:
         db.commit()
         db.refresh(result)
         return result
+
+
+class GamePayerRepository:
+    """PRODUCT_LADDER용 다중 결제자 관리"""
+
+    @staticmethod
+    def create(db: Session, game_result_id: int, user_id: int) -> GamePayer:
+        payer = GamePayer(
+            game_result_id=game_result_id,
+            user_id=user_id,
+            payment_status="PENDING",
+        )
+        db.add(payer)
+        db.commit()
+        db.refresh(payer)
+        return payer
+
+    @staticmethod
+    def create_bulk(db: Session, game_result_id: int, user_ids: list[int]) -> list[GamePayer]:
+        payers = []
+        for user_id in user_ids:
+            payer = GamePayer(
+                game_result_id=game_result_id,
+                user_id=user_id,
+                payment_status="PENDING",
+            )
+            db.add(payer)
+            payers.append(payer)
+        db.commit()
+        for payer in payers:
+            db.refresh(payer)
+        return payers
+
+    @staticmethod
+    def list_by_game_result(db: Session, game_result_id: int) -> list[GamePayer]:
+        return db.query(GamePayer).filter(GamePayer.game_result_id == game_result_id).all()

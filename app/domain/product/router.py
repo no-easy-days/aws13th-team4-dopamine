@@ -1,11 +1,14 @@
 import math
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.domain.product import schemas
 from app.domain.product.service import NaverShoppingService
 from app.domain.product.repository import ProductRepository
+from app.domain.room.service import RoomService
+from app.domain.room.schemas import ProductRoomCreate, RoomResponse
 
 router = APIRouter(
     prefix="/api/v1/products",
@@ -79,3 +82,25 @@ def get_product_detail(
         "message": "상품 상세 조회 성공",
         "data": product
     }
+
+
+@router.post("/{product_id}/rooms", response_model=RoomResponse)
+def create_product_room(
+    product_id: int,
+    payload: ProductRoomCreate,
+    x_user_id: int = Header(..., alias="X-User-Id"),
+    db: Session = Depends(get_db)
+):
+    """상품 기반 방 생성 (PRODUCT_LADDER)"""
+    room_service = RoomService()
+    return room_service.create_product_room(db, x_user_id, product_id, payload)
+
+
+@router.get("/{product_id}/rooms", response_model=List[RoomResponse])
+def list_product_rooms(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+    """특정 상품의 OPEN 상태 방 목록 조회"""
+    room_service = RoomService()
+    return room_service.list_rooms_by_product(db, product_id)
