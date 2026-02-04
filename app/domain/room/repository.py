@@ -107,13 +107,24 @@ class RoomParticipantRepository:
         return query.order_by(RoomParticipant.joined_at.asc()).all()
 
     @staticmethod
+    def count_joined(db: Session, room_id: int) -> int:
+        return (
+            db.query(RoomParticipant)
+            .filter(
+                RoomParticipant.room_id == room_id,
+                RoomParticipant.state == "JOINED",
+            )
+            .count()
+        )
+
+    @staticmethod
     def count_ready(db: Session, room_id: int) -> int:
         return (
             db.query(RoomParticipant)
             .filter(
                 RoomParticipant.room_id == room_id,
                 RoomParticipant.state == "JOINED",
-                RoomParticipant.is_ready == True,
+                RoomParticipant.is_ready.is_(True),
             )
             .count()
         )

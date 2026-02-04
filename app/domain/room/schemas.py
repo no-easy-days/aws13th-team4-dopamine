@@ -25,6 +25,7 @@ class RoomResponse(BaseModel):
     gift_owner_user_id: Optional[int]
     created_at: datetime
     updated_at: datetime
+    current_participant_count: int = 0
 
 
 class RoomDetailResponse(BaseModel):
@@ -43,6 +44,7 @@ class RoomDetailResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     participants: List["ParticipantResponse"] = []
+    current_participant_count: int = 0
     current_ready_count: int = 0
 
 

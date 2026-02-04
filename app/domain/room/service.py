@@ -43,7 +43,9 @@ class RoomService:
             gift_owner_user_id=user_id,
         )
 
-        return RoomResponse.model_validate(room)
+        response = RoomResponse.model_validate(room)
+        response.current_participant_count = 0
+        return response
 
     def get_room_detail(self, db: Session, user_id: int, room_id: int) -> RoomDetailResponse:
         """방 상세 조회 (입장 화면)"""
@@ -65,18 +67,24 @@ class RoomService:
 
         # 참여자 목록
         participants = self.participant_repository.list_by_room(db, room_id, state="JOINED")
-        ready_count = self.participant_repository.count_ready(db, room_id)
 
         response = RoomDetailResponse.model_validate(room)
         response.participants = [ParticipantResponse.model_validate(p) for p in participants]
-        response.current_ready_count = ready_count
+        response.current_participant_count = len(participants)
+        response.current_ready_count = self.participant_repository.count_ready(db, room_id)
 
+        return response
+
+    def _to_room_response(self, db: Session, room: Room) -> RoomResponse:
+        """Room 객체를 RoomResponse로 변환 (참여자 수 포함)"""
+        response = RoomResponse.model_validate(room)
+        response.current_participant_count = self.participant_repository.count_joined(db, room.id)
         return response
 
     def list_my_rooms(self, db: Session, user_id: int) -> List[RoomResponse]:
         """내가 만든 방 목록"""
         rooms = self.room_repository.list_by_gift_owner(db, user_id)
-        return [RoomResponse.model_validate(room) for room in rooms]
+        return [self._to_room_response(db, room) for room in rooms]
 
     def list_friend_rooms(self, db: Session, user_id: int) -> List[RoomResponse]:
         """친구들의 OPEN 상태 방 목록"""
@@ -88,7 +96,7 @@ class RoomService:
             return []
 
         rooms = self.room_repository.list_open_rooms_for_friend(db, friend_user_ids)
-        return [RoomResponse.model_validate(room) for room in rooms]
+        return [self._to_room_response(db, room) for room in rooms]
 
     def delete_room(self, db: Session, user_id: int, room_id: int) -> None:
         """방 삭제 (방장만 가능)"""
