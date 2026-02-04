@@ -19,3 +19,6 @@ class FriendResponse(BaseModel):
 
 class FriendListResponse(BaseModel):
     items: List[FriendResponse]
+    total_count: int
+    page: int
+    size: int

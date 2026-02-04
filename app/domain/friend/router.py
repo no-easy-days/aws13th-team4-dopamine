@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.common.schemas import BaseResponse
 from app.core.database import get_db
 from app.core.exceptions import UnauthorizedException
-from app.domain.friend.schemas import FriendCreate, FriendResponse
+from app.domain.friend.schemas import FriendCreate, FriendListResponse, FriendResponse
 from app.domain.friend.service import FriendService
 from app.domain.wishlist.schemas import WishlistItemResponse
 from app.domain.wishlist.service import WishlistService
@@ -44,13 +44,13 @@ def remove_friend(
     return BaseResponse.ok(None, message="Friend removed")
 
 
-@router.get("", response_model=BaseResponse[List[FriendResponse]])
+@router.get("", response_model=BaseResponse[FriendListResponse])
 def list_friends(
+    page: int = 1,
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    friends = service.list_friends(db, owner_user_id=user_id)
-    data = [FriendResponse.model_validate(friend) for friend in friends]
+    data = service.list_friends(db, owner_user_id=user_id, page=page, size=10)
     return BaseResponse.ok(data)
 
 
