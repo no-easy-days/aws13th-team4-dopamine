@@ -17,7 +17,7 @@ class UserCreate(BaseModel):
     # - 형식이 틀리면 비즈니스 로직 진입 전에 422 에러를 반환합니다.
     email: EmailStr = Field(..., description="사용자 이메일")
 
-    # 2. 비밀번호 보안 (SecretStr + 길이 제한)
+    # 2. 비밀번호 보안 (SecretStr + 길이 제한)py
     # - SecretStr: 로그 파일이나 print() 출력 시 '**********'로 마스킹되어 PII(개인정보) 유출을 막습니다.
     # - min=8: 무차별 대입 공격(Brute Force) 방어용 최소 길이
     # - max=50: 해싱 연산 과부하(DoS) 방지용 최대 길이
