@@ -135,11 +135,6 @@ class RoomService:
         if existing and existing.state == "JOINED":
             raise BadRequestException(message="Already joined")
 
-        # 정원 확인
-        current_count = self.participant_repository.count_joined(db, room_id)
-        if current_count >= room.max_participants:
-            raise BadRequestException(message="Room is full")
-
         # 입장
         participant = self.participant_repository.create(db, room_id, user_id, role="MEMBER")
         return ParticipantResponse.model_validate(participant)
@@ -157,6 +152,12 @@ class RoomService:
         participant = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
         if not participant or participant.state != "JOINED":
             raise BadRequestException(message="Not a participant")
+
+        # 레디하려는 경우 정원 체크
+        if is_ready and not participant.is_ready:
+            ready_count = self.participant_repository.count_ready(db, room_id)
+            if ready_count >= room.max_participants:
+                raise BadRequestException(message="Ready slots are full")
 
         # 레디 상태 변경
         participant = self.participant_repository.update_ready(db, participant, is_ready)
