@@ -162,6 +162,27 @@ class RoomService:
         participant = self.participant_repository.update_ready(db, participant, is_ready)
         return ParticipantResponse.model_validate(participant)
 
+    def leave_room(self, db: Session, user_id: int, room_id: int) -> None:
+        """방 나가기 (레디한 사람만 가능)"""
+        room = self.room_repository.get_by_id(db, room_id)
+        if not room:
+            raise NotFoundException(message="Room not found")
+
+        if room.status == "RUNNING":
+            raise BadRequestException(message="Cannot leave during game")
+
+        # 참여자인지 확인
+        participant = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
+        if not participant or participant.state != "JOINED":
+            raise BadRequestException(message="Not a participant")
+
+        # 레디한 사람만 나가기 가능
+        if not participant.is_ready:
+            raise BadRequestException(message="Only ready participants can leave")
+
+        # 나가기
+        self.participant_repository.leave(db, participant)
+
     def delete_room(self, db: Session, user_id: int, room_id: int) -> None:
         """방 삭제 (방장만 가능)"""
         room = self.room_repository.get_by_id(db, room_id)

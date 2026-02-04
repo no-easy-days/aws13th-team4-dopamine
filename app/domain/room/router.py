@@ -95,6 +95,17 @@ def set_ready(
     return BaseResponse.ok(participant)
 
 
+@router.post("/{room_id}/leave", response_model=BaseResponse[None])
+def leave_room(
+    room_id: int,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    """방 나가기"""
+    service.leave_room(db, user_id=user_id, room_id=room_id)
+    return BaseResponse.ok(None, message="Left the room")
+
+
 @router.delete("/{room_id}", response_model=BaseResponse[None])
 def delete_room(
     room_id: int,
