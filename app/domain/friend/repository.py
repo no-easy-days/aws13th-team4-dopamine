@@ -29,6 +29,23 @@ class FriendRepository:
         )
 
     @staticmethod
+    def count_by_owner(db: Session, owner_user_id: int) -> int:
+        return db.query(Friend).filter(Friend.owner_user_id == owner_user_id).count()
+
+    @staticmethod
+    def list_by_owner_paginated(
+        db: Session, owner_user_id: int, offset: int, limit: int
+    ) -> List[Friend]:
+        return (
+            db.query(Friend)
+            .filter(Friend.owner_user_id == owner_user_id)
+            .order_by(Friend.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    @staticmethod
     def create(db: Session, owner_user_id: int, friend_user_id: int) -> Friend:
         friend = Friend(owner_user_id=owner_user_id, friend_user_id=friend_user_id)
         db.add(friend)

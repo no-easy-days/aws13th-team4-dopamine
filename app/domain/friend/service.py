@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import BadRequestException, ConflictException, NotFoundException
 from app.domain.friend.models import Friend
 from app.domain.friend.repository import FriendRepository
+from app.domain.friend.schemas import FriendListResponse, FriendResponse
 
 
 class FriendService:
@@ -32,5 +33,15 @@ class FriendService:
 
         self.repository.delete(db, friend)
 
-    def list_friends(self, db: Session, owner_user_id: int) -> List[Friend]:
-        return self.repository.list_by_owner(db, owner_user_id=owner_user_id)
+    def list_friends(
+        self, db: Session, owner_user_id: int, page: int, size: int
+    ) -> FriendListResponse:
+        total_count = self.repository.count_by_owner(db, owner_user_id=owner_user_id)
+        offset = (page - 1) * size
+        friends = self.repository.list_by_owner_paginated(
+            db, owner_user_id=owner_user_id, offset=offset, limit=size
+        )
+        items = [FriendResponse.model_validate(friend) for friend in friends]
+        return FriendListResponse(
+            items=items, total_count=total_count, page=page, size=size
+        )
