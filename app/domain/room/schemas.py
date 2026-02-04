@@ -63,3 +63,7 @@ class ParticipantResponse(BaseModel):
 
 class RoomListResponse(BaseModel):
     items: List[RoomResponse]
+
+
+class ReadyRequest(BaseModel):
+    is_ready: bool = Field(..., description="레디 상태")
