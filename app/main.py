@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.core.exceptions import BaseAPIException, api_exception_handler
 from app.domain.friend.router import router as friend_router
 from app.domain.wishlist.router import router as wishlist_router
+from app.domain.room.router import router as room_router
 
 
 def create_app() -> FastAPI:
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     # Register routers
     app.include_router(friend_router, prefix="/api/v1/friends", tags=["friends"])
     app.include_router(wishlist_router, prefix="/api/v1/wishlist", tags=["wishlist"])
+    app.include_router(room_router, prefix="/api/v1/rooms", tags=["rooms"])
 
     return app
 
