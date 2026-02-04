@@ -17,7 +17,7 @@ class UserRepository:
         - 안정성: IntegrityError 처리를 통해 동시성 이슈(따닥 클릭) 및 중복 데이터 예외 처리
         """
         try:
-            # 1. 명시적 객체 생성 (Models.py의 password_hash 컬럼명 준수)
+            # 1. 명시적 객체 생성 (Models.py의 password_hash 컬럼명)
             user = User(
                 email=user_create.email,
                 nickname=user_create.nickname,
@@ -31,7 +31,7 @@ class UserRepository:
             return user
             
         except IntegrityError as e:
-            # [트러블슈팅] 중복 가입 시 서버 터짐 방지 및 원인 파악
+            # 중복 가입 시 서버 터짐 방지 및 원인 파악
             self.db.rollback()
             error_msg = str(e.orig)
             
