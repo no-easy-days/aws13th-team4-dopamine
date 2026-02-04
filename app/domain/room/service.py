@@ -9,7 +9,7 @@ from app.domain.game.models import Game, GameResult
 from app.domain.game.repository import GameRepository, GameResultRepository
 from app.domain.room.models import Room
 from app.domain.room.repository import RoomRepository, RoomParticipantRepository
-from app.domain.room.schemas import RoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest
+from app.domain.room.schemas import RoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest, GameResultInfo
 from app.domain.wishlist.models import WishlistItem
 
 
@@ -79,6 +79,19 @@ class RoomService:
         response.participants = [ParticipantResponse.model_validate(p) for p in participants]
         response.current_participant_count = len(participants)
         response.current_ready_count = self.participant_repository.count_ready(db, room_id)
+
+        # 게임 완료 시 결과 포함
+        if room.status == "DONE":
+            game = self.game_repository.get_by_room(db, room_id)
+            if game:
+                game_result = self.game_result_repository.get_by_game(db, game.id)
+                if game_result:
+                    response.game_result = GameResultInfo(
+                        game_id=game_result.game_id,
+                        payer_user_id=game_result.payer_user_id,
+                        recipient_user_id=game_result.recipient_user_id,
+                        product_id=game_result.product_id,
+                    )
 
         return response
 

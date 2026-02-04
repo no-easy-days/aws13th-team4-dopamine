@@ -46,6 +46,7 @@ class RoomDetailResponse(BaseModel):
     participants: List["ParticipantResponse"] = []
     current_participant_count: int = 0
     current_ready_count: int = 0
+    game_result: Optional["GameResultInfo"] = None
 
 
 class ParticipantResponse(BaseModel):
