@@ -56,6 +56,20 @@ class RoomRepository:
         )
 
     @staticmethod
+    def list_by_product(db: Session, product_id: int) -> List[Room]:
+        """특정 상품의 OPEN 상태 PRODUCT_LADDER 방 목록 조회"""
+        return (
+            db.query(Room)
+            .filter(
+                Room.product_id == product_id,
+                Room.status == "OPEN",
+                Room.room_type == "PRODUCT_LADDER",
+            )
+            .order_by(Room.created_at.desc())
+            .all()
+        )
+
+    @staticmethod
     def create(
         db: Session,
         room_type: str,
@@ -63,7 +77,7 @@ class RoomRepository:
         max_participants: int,
         owner_user_id: int,
         product_id: int,
-        gift_owner_user_id: int,
+        gift_owner_user_id: Optional[int],
     ) -> Room:
         join_code = secrets.token_urlsafe(16)
         room = Room(

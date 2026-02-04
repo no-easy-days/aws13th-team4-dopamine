@@ -5,7 +5,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class RoomCreate(BaseModel):
+    """WISHLIST_GIFT 방 생성 요청"""
     wishlist_item_id: int = Field(..., gt=0, description="위시리스트 아이템 ID")
+    title: Optional[str] = Field(None, max_length=120, description="방 제목")
+    max_participants: int = Field(..., ge=2, le=10, description="최대 참여자 수")
+
+
+class ProductRoomCreate(BaseModel):
+    """PRODUCT_LADDER 방 생성 요청"""
     title: Optional[str] = Field(None, max_length=120, description="방 제목")
     max_participants: int = Field(..., ge=2, le=10, description="최대 참여자 수")
 
@@ -72,10 +79,11 @@ class ReadyRequest(BaseModel):
 
 class GameResultInfo(BaseModel):
     game_id: int
-    payer_user_id: Optional[int] = None  # 참여자만 볼 수 있음
+    payer_user_id: Optional[int] = None  # WISHLIST_GIFT: 참여자만 볼 수 있음
     recipient_user_id: int
     product_id: int
     participant_user_ids: List[int] = []  # 방장은 참여자 목록만 볼 수 있음
+    payer_user_ids: List[int] = []  # PRODUCT_LADDER: 결제자 목록 (당첨자 제외)
 
 
 class ReadyResponse(BaseModel):
