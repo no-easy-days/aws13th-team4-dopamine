@@ -202,8 +202,9 @@ class RoomService:
         if room.status != "OPEN":
             raise BadRequestException(message="Room is not open")
 
-        # 방장은 입장 불가
-        if room.owner_user_id == user_id:
+        # WISHLIST_GIFT: 방장은 입장 불가 (본인이 선물 받는 사람이므로)
+        # PRODUCT_LADDER: 방장도 참여 가능
+        if room.room_type == "WISHLIST_GIFT" and room.owner_user_id == user_id:
             raise BadRequestException(message="Owner cannot join as participant")
 
         # WISHLIST_GIFT: 친구인지 확인
@@ -215,12 +216,16 @@ class RoomService:
             if not is_friend:
                 raise ForbiddenException(message="Only friends can join")
 
-        # 이미 참여했는지 확인
+        # 기존 참여 기록 확인
         existing = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
-        if existing and existing.state == "JOINED":
-            raise BadRequestException(message="Already joined")
+        if existing:
+            if existing.state == "JOINED":
+                raise BadRequestException(message="Already joined")
+            # LEFT 상태면 재입장 처리
+            participant = self.participant_repository.rejoin(db, existing)
+            return ParticipantResponse.model_validate(participant)
 
-        # 입장
+        # 신규 입장
         participant = self.participant_repository.create(db, room_id, user_id, role="MEMBER")
         return ParticipantResponse.model_validate(participant)
 
@@ -354,24 +359,20 @@ class RoomService:
         db.flush()
 
     def leave_room(self, db: Session, user_id: int, room_id: int) -> None:
-        """방 나가기 (레디한 사람만 가능)"""
+        """방 나가기 (레디 여부 상관없이 가능, 게임 진행/완료 시 불가)"""
         room = self.room_repository.get_by_id(db, room_id)
         if not room:
             raise NotFoundException(message="Room not found")
 
-        if room.status == "RUNNING":
-            raise BadRequestException(message="Cannot leave during game")
+        if room.status in ("RUNNING", "DONE"):
+            raise BadRequestException(message="Cannot leave after game started")
 
         # 참여자인지 확인
         participant = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
         if not participant or participant.state != "JOINED":
             raise BadRequestException(message="Not a participant")
 
-        # 레디한 사람만 나가기 가능
-        if not participant.is_ready:
-            raise BadRequestException(message="Only ready participants can leave")
-
-        # 나가기
+        # 나가기 (레디 상태였으면 is_ready=False로 변경됨 → 레디 카운트 자동 감소)
         self.participant_repository.leave(db, participant)
 
     def delete_room(self, db: Session, user_id: int, room_id: int) -> None:

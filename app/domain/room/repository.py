@@ -221,3 +221,15 @@ class RoomParticipantRepository:
         db.commit()
         db.refresh(participant)
         return participant
+
+    @staticmethod
+    def rejoin(db: Session, participant: RoomParticipant) -> RoomParticipant:
+        """LEFT 상태의 참여자를 다시 JOINED로 변경"""
+        from datetime import datetime
+        participant.state = "JOINED"
+        participant.is_ready = False
+        participant.joined_at = datetime.utcnow()
+        participant.left_at = None
+        db.commit()
+        db.refresh(participant)
+        return participant
