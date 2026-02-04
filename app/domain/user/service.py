@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 # 3. 로컬 모듈
 from app.domain.user import schemas
 from app.domain.user.repository import UserRepository
+from app.core.exceptions import UnauthorizedException
 
 
 # [보안 설정: Argon2]
@@ -46,3 +47,18 @@ class UserService:
 
         # D. DB 저장 요청 (Repository에 위임) 및 결과 반환
         return self.user_repo.create(user_create=user_create, hashed_password=hashed_password)
+
+    def login(self, user_login: schemas.UserLogin):
+        """
+        [로그인]
+        1. 이메일로 사용자 조회
+        2. 비밀번호 검증
+        """
+        user = self.user_repo.get_by_email(user_login.email)
+        if not user:
+            raise UnauthorizedException(message="Invalid credentials")
+
+        if not pwd_context.verify(user_login.password.get_secret_value(), user.password_hash):
+            raise UnauthorizedException(message="Invalid credentials")
+
+        return {"user_id": user.id}
