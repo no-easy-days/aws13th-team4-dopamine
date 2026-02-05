@@ -22,19 +22,34 @@ def get_current_user_id(x_user_id: int | None = Header(default=None)) -> int:
     return x_user_id
 
 
-@router.post("", response_model=BaseResponse[FriendResponse])
+@router.post(
+    "",
+    response_model=BaseResponse[FriendResponse],
+    summary="친구 추가",
+    description="다른 사용자를 친구로 추가합니다. 친구 관계는 단방향입니다.",
+)
 def add_friend(
     payload: FriendCreate,
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
+    """
+    친구 추가 API
+    - 단방향 관계: A→B 추가해도 B→A는 아님
+    - 상대방의 방을 보려면 상대방을 친구로 등록해야 함
+    """
     friend = service.add_friend(
         db, owner_user_id=user_id, friend_user_id=payload.friend_user_id
     )
     return BaseResponse.ok(FriendResponse.model_validate(friend))
 
 
-@router.delete("/{friend_user_id}", response_model=BaseResponse[None])
+@router.delete(
+    "/{friend_user_id}",
+    response_model=BaseResponse[None],
+    summary="친구 삭제",
+    description="친구 목록에서 특정 사용자를 삭제합니다.",
+)
 def remove_friend(
     friend_user_id: int,
     db: Session = Depends(get_db),
@@ -44,7 +59,12 @@ def remove_friend(
     return BaseResponse.ok(None, message="Friend removed")
 
 
-@router.get("", response_model=BaseResponse[FriendListResponse])
+@router.get(
+    "",
+    response_model=BaseResponse[FriendListResponse],
+    summary="친구 목록 조회",
+    description="내 친구 목록을 페이지네이션하여 조회합니다. 페이지당 10명씩 반환됩니다.",
+)
 def list_friends(
     page: int = 1,
     db: Session = Depends(get_db),
@@ -54,7 +74,12 @@ def list_friends(
     return BaseResponse.ok(data)
 
 
-@router.get("/{friend_user_id}/wishlist", response_model=BaseResponse[List[WishlistItemResponse]])
+@router.get(
+    "/{friend_user_id}/wishlist",
+    response_model=BaseResponse[List[WishlistItemResponse]],
+    summary="친구 위시리스트 조회",
+    description="친구로 등록된 사용자의 위시리스트를 조회합니다. 친구 관계가 아니면 조회할 수 없습니다.",
+)
 def get_friend_wishlist(
     friend_user_id: int,
     db: Session = Depends(get_db),
