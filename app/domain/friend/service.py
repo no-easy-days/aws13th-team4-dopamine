@@ -1,4 +1,4 @@
-from typing import List
+﻿from typing import List
 
 from sqlalchemy.orm import Session
 
@@ -9,9 +9,12 @@ from app.domain.friend.schemas import FriendListResponse, FriendResponse
 
 
 class FriendService:
+    # 친구 비즈니스 로직
+
     def __init__(self, repository: FriendRepository | None = None) -> None:
         self.repository = repository or FriendRepository()
 
+    # 친구 추가 (중복/자기 자신 방지)
     def add_friend(self, db: Session, owner_user_id: int, friend_user_id: int) -> Friend:
         if owner_user_id == friend_user_id:
             raise BadRequestException(message="Cannot add yourself as a friend")
@@ -24,6 +27,7 @@ class FriendService:
 
         return self.repository.create(db, owner_user_id=owner_user_id, friend_user_id=friend_user_id)
 
+    # 친구 삭제
     def remove_friend(self, db: Session, owner_user_id: int, friend_user_id: int) -> None:
         friend = self.repository.get_by_owner_and_friend(
             db, owner_user_id=owner_user_id, friend_user_id=friend_user_id
@@ -33,6 +37,7 @@ class FriendService:
 
         self.repository.delete(db, friend)
 
+    # 친구 목록 + total_count
     def list_friends(
         self, db: Session, owner_user_id: int, page: int, size: int
     ) -> FriendListResponse:

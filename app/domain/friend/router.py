@@ -1,4 +1,4 @@
-from typing import List
+﻿from typing import List
 
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from app.domain.friend.service import FriendService
 from app.domain.wishlist.schemas import WishlistItemResponse
 from app.domain.wishlist.service import WishlistService
 
+# 친구 API 라우터
 router = APIRouter()
 service = FriendService()
 wishlist_service = WishlistService()
@@ -28,6 +29,7 @@ def get_current_user_id(x_user_id: int | None = Header(default=None)) -> int:
     summary="친구 추가",
     description="다른 사용자를 친구로 추가합니다. 친구 관계는 단방향입니다.",
 )
+
 def add_friend(
     payload: FriendCreate,
     db: Session = Depends(get_db),
