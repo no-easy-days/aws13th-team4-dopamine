@@ -35,6 +35,17 @@ class RoomResponse(BaseModel):
     current_participant_count: int = 0
 
 
+class ProductInfo(BaseModel):
+    """방에 연결된 상품 정보"""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    image_url: Optional[str] = None
+    price: Optional[int] = None
+    link_url: Optional[str] = None
+
+
 class RoomDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -54,6 +65,7 @@ class RoomDetailResponse(BaseModel):
     current_participant_count: int = 0
     current_ready_count: int = 0
     game_result: Optional["GameResultInfo"] = None
+    product: Optional[ProductInfo] = None
 
 
 class ParticipantResponse(BaseModel):

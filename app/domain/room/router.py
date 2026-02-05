@@ -133,7 +133,7 @@ def set_ready(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
 ):
-    participant, game_result = service.set_ready(db, user_id=user_id, room_id=room_id, is_ready=payload.is_ready)
+    participant, game_result, payer_user_ids = service.set_ready(db, user_id=user_id, room_id=room_id, is_ready=payload.is_ready)
 
     response = ReadyResponse(
         participant=participant,
@@ -146,6 +146,7 @@ def set_ready(
             payer_user_id=game_result.payer_user_id,
             recipient_user_id=game_result.recipient_user_id,
             product_id=game_result.product_id,
+            payer_user_ids=payer_user_ids or [],
         )
 
     return BaseResponse.ok(response)

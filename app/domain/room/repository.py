@@ -75,6 +75,23 @@ class RoomRepository:
         )
 
     @staticmethod
+    def list_by_source_product(db: Session, source: str, source_product_id: str) -> List[Room]:
+        """같은 원본 상품(source + source_product_id)의 OPEN 상태 PRODUCT_LADDER 방 목록 조회"""
+        from app.domain.product.models import Product
+        return (
+            db.query(Room)
+            .join(Product, Room.product_id == Product.id)
+            .filter(
+                Product.source == source,
+                Product.source_product_id == source_product_id,
+                Room.status == "OPEN",
+                Room.room_type == "PRODUCT_LADDER",
+            )
+            .order_by(Room.created_at.desc())
+            .all()
+        )
+
+    @staticmethod
     def create(
         db: Session,
         room_type: str,
