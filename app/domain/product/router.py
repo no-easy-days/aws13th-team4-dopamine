@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exceptions import UnauthorizedException
 from app.domain.product import schemas
 from app.domain.product.service import NaverShoppingService, ProductService
 from app.domain.product.repository import ProductRepository
@@ -17,9 +18,17 @@ router = APIRouter(
 )
 
 
-@router.get("/search", response_model=schemas.ProductSearchResponse,
-            summary="상품 검색",
-            description="네이버 쇼핑 데이터를 검색시 실시간으로 조회하여 출력"
+def get_current_user_id(x_user_id: int | None = Header(default=None)) -> int:
+    if x_user_id is None:
+        raise UnauthorizedException(message="X-User-Id header is required")
+    return x_user_id
+
+
+@router.get(
+    "/search",
+    response_model=schemas.ProductSearchResponse,
+    summary="상품 검색",
+    description="네이버 쇼핑 데이터를 검색시 실시간으로 조회하여 출력",
 )
 # 네이버 쇼핑 검색 + DB 저장
 
@@ -31,10 +40,10 @@ def search_products(
     db: Session = Depends(get_db),
 ):
     """
-            상품 검색 및 출력 로직:
-            - 외부 데이터 호출: 네이버 쇼핑 API를 통해 실시간 데이터를 수집합니다.
-            - 데이터 파싱: 수집된 Raw 데이터를 서비스 규격에 맞는 형식으로 변환합니다.
-            - 페이지네이션: `page`와 `display` 파라미터를 통해 페이징 처리를 지원합니다.
+    상품 검색 및 출력 로직:
+    - 외부 데이터 호출: 네이버 쇼핑 API를 통해 실시간 데이터를 수집합니다.
+    - 데이터 파싱: 수집된 Raw 데이터를 서비스 규격에 맞는 형식으로 변환합니다.
+    - 페이지네이션: `page`와 `display` 파라미터를 통해 페이징 처리를 지원합니다.
     """
     try:
         start = ((page - 1) * display) + 1
@@ -71,19 +80,24 @@ def search_products(
         )
 
 
-@router.get("/favorites", response_model=schemas.ProductFavoriteListResponse,
-            summary="즐겨찾기 상품 목록 조회",
-            description="즐겨찾기한 상품들의 목록을 페이징 처리하여 조회"
+@router.get(
+    "/favorites",
+    response_model=schemas.ProductFavoriteListResponse,
+    summary="즐겨찾기 상품 목록 조회",
+    description="즐겨찾기한 상품들의 목록을 페이징 처리하여 조회",
 )
 # 즐겨찾기 상품 목록 조회
 def list_favorite_products(
     page: int = Query(1, description="페이지 번호", ge=1),
     size: int = Query(10, description="페이지 크기", ge=1, le=10),
     db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """즐겨찾기한 상품들의 목록을 페이징 처리하여 조회합니다."""
     product_service = ProductService()
-    items, total_items = product_service.list_favorites(db, page=page, size=size)
+    items, total_items = product_service.list_favorites(
+        db, user_id=user_id, page=page, size=size
+    )
     total_pages = math.ceil(total_items / size) if size > 0 else 0
 
     return {
@@ -106,9 +120,10 @@ def list_favorite_products(
 def save_favorite_product(
     payload: schemas.ProductFavoriteCreate,
     db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     product_service = ProductService()
-    product = product_service.save_favorite(db, payload)
+    product = product_service.save_favorite(db, user_id=user_id, payload=payload)
     return {
         "success": True,
         "message": "상품 즐겨찾기 저장 성공",
@@ -116,14 +131,17 @@ def save_favorite_product(
     }
 
 
-@router.delete("/favorites/{product_id}", response_model=schemas.ProductFavoriteDeleteResponse)
+@router.delete(
+    "/favorites/{product_id}", response_model=schemas.ProductFavoriteDeleteResponse
+)
 # 즐겨찾기 상품 삭제
 def delete_favorite_product(
     product_id: int,
     db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     product_service = ProductService()
-    product_service.delete_favorite(db, product_id)
+    product_service.delete_favorite(db, user_id=user_id, product_id=product_id)
     return {
         "success": True,
         "message": "즐겨찾기 삭제 성공",
@@ -136,9 +154,11 @@ def delete_favorite_product(
 def get_product_detail(
     product_id: int,
     db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
-
-    product = ProductRepository.get_product_by_id(db, product_id)
+    product = ProductRepository.get_product_by_id_for_user(
+        db, user_id=user_id, product_id=product_id
+    )
 
     if not product:
         raise HTTPException(
