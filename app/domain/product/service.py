@@ -1,8 +1,14 @@
-﻿import requests
-import os
-from dotenv import load_dotenv
-from typing import Dict, List
+﻿import os
 from datetime import datetime
+from typing import Dict, List, Tuple
+
+import requests
+from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+
+from app.core.exceptions import ConflictException, NotFoundException
+from app.domain.product.repository import ProductRepository
+from app.domain.wishlist.models import WishlistItem
 
 load_dotenv()
 
@@ -82,3 +88,57 @@ class NaverShoppingService:
         """네이버 API 전체 응답 파싱"""
         items = naver_response.get("items", [])
         return [NaverShoppingService.parse_product_item(item) for item in items]
+
+
+class ProductService:
+    def __init__(self, product_repository: ProductRepository | None = None) -> None:
+        self.product_repository = product_repository or ProductRepository()
+
+    def list_favorites(
+        self, db: Session, page: int, size: int
+    ) -> Tuple[List["Product"], int]:
+        total_items = self.product_repository.count_all(db)
+        offset = (page - 1) * size
+        items = self.product_repository.list_paginated(db, offset=offset, limit=size)
+        return items, total_items
+
+    def save_favorite(self, db: Session, payload) -> "Product":
+        existing = self.product_repository.get_by_source_product_id(
+            db, source=payload.source, source_product_id=payload.source_product_id
+        )
+        if existing:
+            raise ConflictException(message="Product already favorited")
+
+        fields = {
+            "source": payload.source,
+            "source_product_id": payload.source_product_id,
+            "title": payload.title,
+            "image_url": payload.image_url,
+            "link_url": payload.link_url,
+            "mall_name": payload.mall_name,
+            "brand": payload.brand,
+            "maker": payload.maker,
+            "category1": payload.category1,
+            "category2": payload.category2,
+            "category3": payload.category3,
+            "category4": payload.category4,
+            "price": payload.price,
+            "last_fetched_at": datetime.utcnow(),
+        }
+
+        return self.product_repository.create(db, **fields)
+
+    def delete_favorite(self, db: Session, product_id: int) -> None:
+        product = self.product_repository.get_product_by_id(db, product_id)
+        if not product:
+            raise NotFoundException(message="Product not found")
+
+        in_wishlist = (
+            db.query(WishlistItem)
+            .filter(WishlistItem.product_id == product_id)
+            .first()
+        )
+        if in_wishlist:
+            raise ConflictException(message="Product is used in wishlist")
+
+        self.product_repository.delete(db, product)

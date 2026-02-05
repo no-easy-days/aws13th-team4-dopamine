@@ -1,20 +1,32 @@
-from datetime import datetime
-from typing import Optional, List, Any
-from pydantic import BaseModel
+﻿from datetime import datetime
+from typing import Optional, List
+from pydantic import BaseModel, Field
 
 
 class ProductSearchItem(BaseModel):
-    """검색 결과"""
+    """Search result item"""
+
+    source: str
+    source_product_id: str
     title: str
     price: int
     image_url: Optional[str] = None
+    link_url: Optional[str] = None
     mall_name: Optional[str] = None
+    brand: Optional[str] = None
+    maker: Optional[str] = None
+    category1: Optional[str] = None
+    category2: Optional[str] = None
+    category3: Optional[str] = None
+    category4: Optional[str] = None
 
     class Config:
         from_attributes = True
 
+
 class ProductDetail(BaseModel):
-    """상품 상세 정보 전체"""
+    """Product detail"""
+
     id: int
     source: str
     source_product_id: str
@@ -36,6 +48,7 @@ class ProductDetail(BaseModel):
     class Config:
         from_attributes = True
 
+
 class PaginationMeta(BaseModel):
     page: int
     size: int
@@ -46,14 +59,52 @@ class PaginationMeta(BaseModel):
 
 
 class ProductSearchResponse(BaseModel):
-    """상품 검색 목록 응답 """
+    """Product search response"""
+
     success: bool = True
     message: str = "Success"
     data: List[ProductSearchItem]
     meta: PaginationMeta
 
+
 class ProductDetailResponse(BaseModel):
-    """상품 상세 조회 응답 """
+    """Product detail response"""
+
     success: bool = True
     message: str = "Success"
     data: ProductDetail
+
+
+class ProductFavoriteCreate(BaseModel):
+    """Save a product as a favorite"""
+
+    source: str = Field(default="NAVER", min_length=1, max_length=20)
+    source_product_id: str = Field(..., min_length=1, max_length=64)
+    title: str = Field(..., min_length=1, max_length=255)
+    image_url: Optional[str] = Field(default=None, max_length=2000)
+    link_url: Optional[str] = Field(default=None, max_length=2000)
+    mall_name: Optional[str] = Field(default=None, max_length=120)
+    brand: Optional[str] = Field(default=None, max_length=120)
+    maker: Optional[str] = Field(default=None, max_length=120)
+    category1: Optional[str] = Field(default=None, max_length=120)
+    category2: Optional[str] = Field(default=None, max_length=120)
+    category3: Optional[str] = Field(default=None, max_length=120)
+    category4: Optional[str] = Field(default=None, max_length=120)
+    price: int = Field(..., ge=0)
+
+
+class ProductFavoriteListResponse(BaseModel):
+    """Favorite products list response"""
+
+    success: bool = True
+    message: str = "Success"
+    data: List[ProductDetail]
+    meta: PaginationMeta
+
+
+class ProductFavoriteDeleteResponse(BaseModel):
+    """Favorite product delete response"""
+
+    success: bool = True
+    message: str = "Success"
+    data: None = None
