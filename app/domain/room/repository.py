@@ -22,10 +22,24 @@ class RoomRepository:
 
     @staticmethod
     def list_by_gift_owner(db: Session, gift_owner_user_id: int) -> List[Room]:
+        """WISHLIST_GIFT 방 조회용 (gift_owner_user_id 기준)"""
         return (
             db.query(Room)
             .filter(
                 Room.gift_owner_user_id == gift_owner_user_id,
+                Room.status != "DELETED",
+            )
+            .order_by(Room.created_at.desc())
+            .all()
+        )
+
+    @staticmethod
+    def list_by_owner(db: Session, owner_user_id: int) -> List[Room]:
+        """내가 만든 모든 방 조회 (owner_user_id 기준)"""
+        return (
+            db.query(Room)
+            .filter(
+                Room.owner_user_id == owner_user_id,
                 Room.status != "DELETED",
             )
             .order_by(Room.created_at.desc())
