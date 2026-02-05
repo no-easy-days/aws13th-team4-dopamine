@@ -33,19 +33,14 @@ class UserService:
         2. 통과 시, 보안을 위해 비밀번호를 Argon2로 해싱합니다.
         3. 준비된 데이터를 Repository에 전달하여 최종 저장합니다.
         """
-        # A. 이메일 중복 체크 (Fail Fast)
         if self.user_repo.get_by_email(user_create.email):
             raise ValueError("이미 등록된 이메일입니다.")
 
-        # B. 닉네임 중복 체크
         if self.user_repo.get_by_nickname(user_create.nickname):
             raise ValueError("이미 사용 중인 닉네임입니다.")
 
-        # C. 비밀번호 암호화 
-        # schemas.py의 SecretStr에서 실제 값을 꺼낼 때는 .get_secret_value()를 사용합니다.
         hashed_password = self._get_password_hash(user_create.password.get_secret_value())
 
-        # D. DB 저장 요청 (Repository에 위임) 및 결과 반환
         return self.user_repo.create(user_create=user_create, hashed_password=hashed_password)
 
     def login(self, user_login: schemas.UserLogin):
@@ -62,3 +57,12 @@ class UserService:
             raise UnauthorizedException(message="Invalid credentials")
 
         return {"user_id": user.id}
+
+    def logout(self):
+        """
+        [로그아웃 비즈니스 로직]
+        - 현재 무상태(Stateless) 아키텍처를 유지하므로 서버 측 세션 저장소 조작은 수행하지 않습니다.
+        - 인프라 전문가 관점: 나중에 Redis 블랙리스트 등을 도입할 경우, 이 메서드에 토큰 무효화 로직이 추가됩니다.
+        """
+        # 현재는 별도의 상태 저장 없이 로직상 성공 처리를 수행합니다.
+        pass
