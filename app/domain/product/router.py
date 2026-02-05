@@ -17,7 +17,10 @@ router = APIRouter(
 )
 
 
-@router.get("/search", response_model=schemas.ProductSearchResponse)
+@router.get("/search", response_model=schemas.ProductSearchResponse,
+            summary="상품 검색",
+            description="네이버 쇼핑 데이터를 검색시 실시간으로 조회하여 출력"
+)
 # 네이버 쇼핑 검색 + DB 저장
 def search_products(
     query: str = Query(..., description="검색 키워드", min_length=1),
@@ -26,6 +29,12 @@ def search_products(
     sort: str = Query("sim", description="정렬 (sim|date|asc|dsc)"),
     db: Session = Depends(get_db),
 ):
+    """
+            상품 검색 및 출력 로직:
+            - 외부 데이터 호출: 네이버 쇼핑 API를 통해 실시간 데이터를 수집합니다.
+            - 데이터 파싱: 수집된 Raw 데이터를 서비스 규격에 맞는 형식으로 변환합니다.
+            - 페이지네이션: `page`와 `display` 파라미터를 통해 페이징 처리를 지원합니다.
+    """
     try:
         start = ((page - 1) * display) + 1
         naver_result = NaverShoppingService.search_products(
@@ -67,6 +76,7 @@ def get_product_detail(
     product_id: int,
     db: Session = Depends(get_db),
 ):
+
     product = ProductRepository.get_product_by_id(db, product_id)
 
     if not product:
