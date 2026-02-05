@@ -7,6 +7,7 @@ from app.domain.user.models import User  # noqa: F401  # ensure FK target is reg
 class Friend(Base):
     __tablename__ = "friends"
 
+    # 친구 관계 테이블 (owner -> friend)
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     owner_user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
     friend_user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)

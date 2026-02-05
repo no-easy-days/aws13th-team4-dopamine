@@ -1,4 +1,4 @@
-from typing import List
+﻿from typing import List
 
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from app.domain.friend.service import FriendService
 from app.domain.wishlist.schemas import WishlistItemResponse
 from app.domain.wishlist.service import WishlistService
 
+# 친구 API 라우터
 router = APIRouter()
 service = FriendService()
 wishlist_service = WishlistService()
@@ -23,6 +24,7 @@ def get_current_user_id(x_user_id: int | None = Header(default=None)) -> int:
 
 
 @router.post("", response_model=BaseResponse[FriendResponse])
+# 친구 추가
 def add_friend(
     payload: FriendCreate,
     db: Session = Depends(get_db),
@@ -35,6 +37,7 @@ def add_friend(
 
 
 @router.delete("/{friend_user_id}", response_model=BaseResponse[None])
+# 친구 삭제
 def remove_friend(
     friend_user_id: int,
     db: Session = Depends(get_db),
@@ -45,6 +48,7 @@ def remove_friend(
 
 
 @router.get("", response_model=BaseResponse[FriendListResponse])
+# 친구 목록 (페이지네이션)
 def list_friends(
     page: int = 1,
     db: Session = Depends(get_db),
@@ -55,6 +59,7 @@ def list_friends(
 
 
 @router.get("/{friend_user_id}/wishlist", response_model=BaseResponse[List[WishlistItemResponse]])
+# 친구 위시리스트 조회
 def get_friend_wishlist(
     friend_user_id: int,
     db: Session = Depends(get_db),
