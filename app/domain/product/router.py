@@ -35,7 +35,6 @@ def search_products(
 
 
         parsed_products = NaverShoppingService.parse_products(naver_result)
-        saved_products = ProductRepository.bulk_create_or_update(db, parsed_products)
 
 
         total_items = naver_result.get("total", 0)
@@ -45,7 +44,7 @@ def search_products(
         return {
             "success": True,
             "message": "상품 검색 성공",
-            "data": saved_products,
+            "data": parsed_products,
             "meta": {
                 "page": page,
                 "size": display,
