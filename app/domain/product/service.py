@@ -95,21 +95,27 @@ class ProductService:
         self.product_repository = product_repository or ProductRepository()
 
     def list_favorites(
-        self, db: Session, page: int, size: int
+        self, db: Session, user_id: int, page: int, size: int
     ) -> Tuple[List["Product"], int]:
-        total_items = self.product_repository.count_all(db)
+        total_items = self.product_repository.count_all(db, user_id=user_id)
         offset = (page - 1) * size
-        items = self.product_repository.list_paginated(db, offset=offset, limit=size)
+        items = self.product_repository.list_paginated(
+            db, user_id=user_id, offset=offset, limit=size
+        )
         return items, total_items
 
-    def save_favorite(self, db: Session, payload) -> "Product":
+    def save_favorite(self, db: Session, user_id: int, payload) -> "Product":
         existing = self.product_repository.get_by_source_product_id(
-            db, source=payload.source, source_product_id=payload.source_product_id
+            db,
+            user_id=user_id,
+            source=payload.source,
+            source_product_id=payload.source_product_id,
         )
         if existing:
             raise ConflictException(message="Product already favorited")
 
         fields = {
+            "user_id": user_id,
             "source": payload.source,
             "source_product_id": payload.source_product_id,
             "title": payload.title,
@@ -128,8 +134,10 @@ class ProductService:
 
         return self.product_repository.create(db, **fields)
 
-    def delete_favorite(self, db: Session, product_id: int) -> None:
-        product = self.product_repository.get_product_by_id(db, product_id)
+    def delete_favorite(self, db: Session, user_id: int, product_id: int) -> None:
+        product = self.product_repository.get_product_by_id_for_user(
+            db, user_id=user_id, product_id=product_id
+        )
         if not product:
             raise NotFoundException(message="Product not found")
 

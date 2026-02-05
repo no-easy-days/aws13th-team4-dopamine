@@ -1,4 +1,4 @@
-from typing import List
+﻿from typing import List
 
 from sqlalchemy.orm import Session
 
@@ -51,8 +51,14 @@ class WishlistService:
             items.append(item)
         return items
 
-    def add_to_wishlist(self, db: Session, user_id: int, payload: WishlistCreate) -> WishlistItemResponse:
-        product = db.query(Product).filter(Product.id == payload.product_id).first()
+    def add_to_wishlist(
+        self, db: Session, user_id: int, payload: WishlistCreate
+    ) -> WishlistItemResponse:
+        product = (
+            db.query(Product)
+            .filter(Product.id == payload.product_id, Product.user_id == user_id)
+            .first()
+        )
         if not product:
             raise NotFoundException(message="Product not found")
 
