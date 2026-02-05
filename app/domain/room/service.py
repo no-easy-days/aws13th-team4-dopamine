@@ -182,8 +182,8 @@ class RoomService:
         return response
 
     def list_my_rooms(self, db: Session, user_id: int) -> List[RoomResponse]:
-        """내가 만든 방 목록"""
-        rooms = self.room_repository.list_by_gift_owner(db, user_id)
+        """내가 만든 방 목록 (WISHLIST_GIFT + PRODUCT_LADDER 모두 포함)"""
+        rooms = self.room_repository.list_by_owner(db, user_id)
         return [self._to_room_response(db, room) for room in rooms]
 
     def list_friend_rooms(self, db: Session, user_id: int) -> List[RoomResponse]:
