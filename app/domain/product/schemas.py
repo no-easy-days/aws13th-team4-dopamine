@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 class ProductSearchItem(BaseModel):
     """검색 결과"""
-    id: int
     title: str
     price: int
     image_url: Optional[str] = None
