@@ -19,7 +19,12 @@ def get_current_user_id(x_user_id: int | None = Header(default=None)) -> int:
     return x_user_id
 
 
-@router.get("", response_model=BaseResponse[List[WishlistItemResponse]])
+@router.get(
+    "",
+    response_model=BaseResponse[List[WishlistItemResponse]],
+    summary="내 위시리스트 조회",
+    description="로그인한 사용자의 위시리스트 전체 목록을 조회합니다.",
+)
 def list_my_wishlist(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user_id),
@@ -28,7 +33,12 @@ def list_my_wishlist(
     return BaseResponse.ok(items)
 
 
-@router.post("", response_model=BaseResponse[WishlistItemResponse])
+@router.post(
+    "",
+    response_model=BaseResponse[WishlistItemResponse],
+    summary="위시리스트 추가",
+    description="상품을 내 위시리스트에 추가합니다. 이미 추가된 상품은 중복 추가할 수 없습니다.",
+)
 def add_to_wishlist(
     payload: WishlistCreate,
     db: Session = Depends(get_db),
@@ -38,7 +48,12 @@ def add_to_wishlist(
     return BaseResponse.ok(item)
 
 
-@router.delete("/{product_id}", response_model=BaseResponse[None])
+@router.delete(
+    "/{product_id}",
+    response_model=BaseResponse[None],
+    summary="위시리스트 삭제",
+    description="위시리스트에서 특정 상품을 삭제합니다.",
+)
 def remove_from_wishlist(
     product_id: int,
     db: Session = Depends(get_db),

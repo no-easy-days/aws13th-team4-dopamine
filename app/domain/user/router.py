@@ -43,10 +43,17 @@ async def signup(
     "/login",
     response_model=BaseResponse[LoginResponse],
     status_code=status.HTTP_200_OK,
+    summary="로그인",
+    description="이메일과 비밀번호로 로그인합니다. 성공 시 user_id를 반환합니다.",
 )
 async def login(
     data: UserLogin,
     service: UserService = Depends(get_service),
 ) -> Any:
+    """
+    로그인 API
+    - 이메일/비밀번호 검증 후 user_id 반환
+    - 비밀번호는 Argon2로 검증
+    """
     result = service.login(data)
     return BaseResponse.ok(data=LoginResponse(**result), message="로그인 성공")
