@@ -71,13 +71,17 @@ def search_products(
         )
 
 
-@router.get("/favorites", response_model=schemas.ProductFavoriteListResponse)
+@router.get("/favorites", response_model=schemas.ProductFavoriteListResponse,
+            summary="즐겨찾기 상품 목록 조회",
+            description="즐겨찾기한 상품들의 목록을 페이징 처리하여 조회"
+)
 # 즐겨찾기 상품 목록 조회
 def list_favorite_products(
     page: int = Query(1, description="페이지 번호", ge=1),
     size: int = Query(10, description="페이지 크기", ge=1, le=10),
     db: Session = Depends(get_db),
 ):
+    """즐겨찾기한 상품들의 목록을 페이징 처리하여 조회합니다."""
     product_service = ProductService()
     items, total_items = product_service.list_favorites(db, page=page, size=size)
     total_pages = math.ceil(total_items / size) if size > 0 else 0
