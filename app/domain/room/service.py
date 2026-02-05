@@ -11,7 +11,7 @@ from app.domain.game.models import Game, GameResult, GamePayer
 from app.domain.game.repository import GameRepository, GameResultRepository, GamePayerRepository
 from app.domain.room.models import Room
 from app.domain.room.repository import RoomRepository, RoomParticipantRepository
-from app.domain.room.schemas import RoomCreate, ProductRoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest, GameResultInfo
+from app.domain.room.schemas import RoomCreate, ProductRoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest, GameResultInfo, ProductInfo
 from app.domain.wishlist.models import WishlistItem
 
 
@@ -78,8 +78,11 @@ class RoomService:
             gift_owner_user_id=None,  # PRODUCT_LADDER는 선물받는 대상이 미정
         )
 
+        # PRODUCT_LADDER: 방장도 참여자로 자동 등록
+        self.participant_repository.create(db, room.id, user_id, role="OWNER")
+
         response = RoomResponse.model_validate(room)
-        response.current_participant_count = 0
+        response.current_participant_count = 1  # 방장이 참여자로 포함
         return response
 
     def get_room_detail(self, db: Session, user_id: int, room_id: int) -> RoomDetailResponse:
@@ -108,6 +111,13 @@ class RoomService:
         response.participants = [ParticipantResponse.model_validate(p) for p in participants]
         response.current_participant_count = len(participants)
         response.current_ready_count = self.participant_repository.count_ready(db, room_id)
+
+        # 상품 정보 조회
+        if room.product_id:
+            from app.domain.product.models import Product
+            product = db.query(Product).filter(Product.id == room.product_id).first()
+            if product:
+                response.product = ProductInfo.model_validate(product)
 
         # 게임 완료 시 결과 포함
         if room.status == "DONE":
@@ -198,6 +208,19 @@ class RoomService:
         rooms = self.room_repository.list_by_product(db, product_id)
         return [self._to_room_response(db, room) for room in rooms]
 
+    def list_rooms_by_source_product(self, db: Session, product_id: int) -> List[RoomResponse]:
+        """같은 네이버 상품(source_product_id)의 모든 OPEN 상태 PRODUCT_LADDER 방 목록"""
+        from app.domain.product.models import Product
+
+        # product_id로 source, source_product_id 조회
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            return []
+
+        # source_product_id로 방 검색
+        rooms = self.room_repository.list_by_source_product(db, product.source, product.source_product_id)
+        return [self._to_room_response(db, room) for room in rooms]
+
     def join_room(self, db: Session, user_id: int, room_id: int) -> ParticipantResponse:
         """방 입장"""
         room = self.room_repository.get_by_id(db, room_id)
@@ -234,7 +257,7 @@ class RoomService:
         participant = self.participant_repository.create(db, room_id, user_id, role="MEMBER")
         return ParticipantResponse.model_validate(participant)
 
-    def set_ready(self, db: Session, user_id: int, room_id: int, is_ready: bool) -> Tuple[ParticipantResponse, Optional[GameResult]]:
+    def set_ready(self, db: Session, user_id: int, room_id: int, is_ready: bool) -> Tuple[ParticipantResponse, Optional[GameResult], Optional[List[int]]]:
         """레디 상태 변경. 정원이 다 차면 자동으로 사다리타기 시작."""
         try:
             # 비관적 락으로 방 조회 (동시성 제어)
@@ -262,19 +285,20 @@ class RoomService:
 
             # 정원이 다 찼는지 확인 후 자동 시작
             game_result = None
+            payer_user_ids = None
             if is_ready:
                 ready_count = self.participant_repository.count_ready(db, room_id)
                 if ready_count >= room.max_participants:
                     # 방 상태를 DONE으로 변경 (이미 락이 걸려있음)
                     room.status = "DONE"
                     db.flush()
-                    game_result = self._start_ladder_game_internal(db, room)
+                    game_result, payer_user_ids = self._start_ladder_game_internal(db, room)
 
             # 모든 작업 완료 후 커밋
             db.commit()
             db.refresh(participant)
 
-            return ParticipantResponse.model_validate(participant), game_result
+            return ParticipantResponse.model_validate(participant), game_result, payer_user_ids
 
         except (NotFoundException, BadRequestException, ForbiddenException):
             db.rollback()
@@ -283,7 +307,7 @@ class RoomService:
             db.rollback()
             raise BadRequestException(message="Failed to update ready status") from e
 
-    def _start_ladder_game_internal(self, db: Session, room: Room) -> GameResult:
+    def _start_ladder_game_internal(self, db: Session, room: Room) -> Tuple[GameResult, Optional[List[int]]]:
         """사다리타기 게임 시작 및 결과 생성 (트랜잭션 내부용 - commit 없음)"""
         # 레디한 참여자 목록
         participants = self.participant_repository.list_by_room(db, room.id, state="JOINED")
@@ -302,6 +326,7 @@ class RoomService:
                 recipient_user_id=room.gift_owner_user_id,
                 payer_user_id=payer.user_id,
             )
+            return game_result, None
         else:
             # PRODUCT_LADDER: 랜덤으로 당첨자(recipient) 선정, 나머지는 payer
             winner = random.choice(ready_participants)
@@ -313,10 +338,10 @@ class RoomService:
                 payer_user_id=None,
             )
             # 당첨자 제외 나머지를 payer로 등록
-            loser_user_ids = [p.user_id for p in ready_participants if p.user_id != winner.user_id]
-            self._create_game_payers_internal(db, game_result.id, loser_user_ids)
+            payer_user_ids = [p.user_id for p in ready_participants if p.user_id != winner.user_id]
+            self._create_game_payers_internal(db, game_result.id, payer_user_ids)
 
-        return game_result
+            return game_result, payer_user_ids
 
     def _create_game_internal(self, db: Session, room_id: int) -> Game:
         """Game 생성 (트랜잭션 내부용 - commit 없음)"""
