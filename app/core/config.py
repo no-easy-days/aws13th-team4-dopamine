@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     NAVER_CLIENT_ID: str = ""
     NAVER_CLIENT_SECRET: str = ""
 
+    # JWT 설정 (실제 값은 .env에서 설정)
+    JWT_SECRET_KEY: str = ""  # 필수: .env에서 설정
+    JWT_EXPIRE_HOURS: int = 24
+
     class Config:
         env_file = ".env"
         case_sensitive = True

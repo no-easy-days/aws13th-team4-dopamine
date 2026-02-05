@@ -1,10 +1,10 @@
-﻿import math
+import math
 from typing import List
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.exceptions import UnauthorizedException
+from app.core.auth import get_current_user_id
 from app.domain.product import schemas
 from app.domain.product.service import NaverShoppingService, ProductService
 from app.domain.product.repository import ProductRepository
@@ -16,12 +16,6 @@ router = APIRouter(
     prefix="/api/v1/products",
     tags=["Products"],
 )
-
-
-def get_current_user_id(x_user_id: int | None = Header(default=None)) -> int:
-    if x_user_id is None:
-        raise UnauthorizedException(message="X-User-Id header is required")
-    return x_user_id
 
 
 @router.get(
@@ -178,11 +172,11 @@ def get_product_detail(
 def create_product_room(
     product_id: int,
     payload: ProductRoomCreate,
-    x_user_id: int = Header(..., alias="X-User-Id"),
     db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     room_service = RoomService()
-    return room_service.create_product_room(db, x_user_id, product_id, payload)
+    return room_service.create_product_room(db, user_id, product_id, payload)
 
 
 @router.get("/{product_id}/rooms", response_model=List[RoomResponse])

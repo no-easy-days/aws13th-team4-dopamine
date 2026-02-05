@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.domain.user import schemas
 from app.domain.user.repository import UserRepository
 from app.core.exceptions import UnauthorizedException
+from app.core.auth import create_access_token
 
 
 # [보안 설정: Argon2]
@@ -48,6 +49,7 @@ class UserService:
         [로그인]
         1. 이메일로 사용자 조회
         2. 비밀번호 검증
+        3. JWT 토큰 발급
         """
         user = self.user_repo.get_by_email(user_login.email)
         if not user:
@@ -56,7 +58,14 @@ class UserService:
         if not pwd_context.verify(user_login.password.get_secret_value(), user.password_hash):
             raise UnauthorizedException(message="Invalid credentials")
 
-        return {"user_id": user.id}
+        # JWT 토큰 생성
+        access_token = create_access_token(user_id=user.id, email=user.email)
+
+        return {
+            "user_id": user.id,
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
 
     def logout(self):
         """

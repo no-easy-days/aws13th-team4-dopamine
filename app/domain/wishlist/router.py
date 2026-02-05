@@ -1,22 +1,16 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.common.schemas import BaseResponse
 from app.core.database import get_db
-from app.core.exceptions import UnauthorizedException
+from app.core.auth import get_current_user_id
 from app.domain.wishlist.schemas import WishlistCreate, WishlistItemResponse
 from app.domain.wishlist.service import WishlistService
 
 router = APIRouter()
 service = WishlistService()
-
-
-def get_current_user_id(x_user_id: int | None = Header(default=None)) -> int:
-    if x_user_id is None:
-        raise UnauthorizedException(message="X-User-Id header is required")
-    return x_user_id
 
 
 @router.get(
