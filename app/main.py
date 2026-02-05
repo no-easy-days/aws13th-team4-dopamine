@@ -37,10 +37,10 @@ def create_app() -> FastAPI:
         return {"status": "healthy"}
 
     # Register routers
-    app.include_router(user_router, prefix="/api/v1/users", tags=["users"])
-    app.include_router(friend_router, prefix="/api/v1/friends", tags=["friends"])
-    app.include_router(wishlist_router, prefix="/api/v1/wishlist", tags=["wishlist"])
-    app.include_router(room_router, prefix="/api/v1/rooms", tags=["rooms"])
+    app.include_router(user_router, prefix="/api/v1/users", tags=["Users"])
+    app.include_router(friend_router, prefix="/api/v1/friends", tags=["Friends"])
+    app.include_router(wishlist_router, prefix="/api/v1/wishlist", tags=["Wishlist"])
+    app.include_router(room_router, prefix="/api/v1/rooms", tags=["Rooms"])
     app.include_router(product_router)
     return app
 
