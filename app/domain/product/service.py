@@ -105,6 +105,7 @@ class ProductService:
         return items, total_items
 
     def save_favorite(self, db: Session, user_id: int, payload) -> "Product":
+        # 이미 존재하면 기존 상품 반환 (get or create 패턴)
         existing = self.product_repository.get_by_source_product_id(
             db,
             user_id=user_id,
@@ -112,7 +113,7 @@ class ProductService:
             source_product_id=payload.source_product_id,
         )
         if existing:
-            raise ConflictException(message="Product already favorited")
+            return existing  # 기존 상품 반환
 
         fields = {
             "user_id": user_id,
