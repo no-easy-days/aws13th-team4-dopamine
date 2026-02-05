@@ -93,3 +93,5 @@ class UserLogin(BaseModel):
 
 class LoginResponse(BaseModel):
     user_id: int
+    access_token: str
+    token_type: str = "bearer"
