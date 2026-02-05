@@ -176,6 +176,11 @@ class RoomService:
         rooms = self.room_repository.list_open_rooms_for_friend(db, friend_user_ids)
         return [self._to_room_response(db, room) for room in rooms]
 
+    def list_participating_rooms(self, db: Session, user_id: int) -> List[RoomResponse]:
+        """내가 참여 중인 방 목록 (내가 만든 방 제외)"""
+        rooms = self.participant_repository.list_rooms_by_participant(db, user_id)
+        return [self._to_room_response(db, room) for room in rooms]
+
     def list_rooms_by_friend(self, db: Session, user_id: int, friend_user_id: int) -> List[RoomResponse]:
         """특정 친구의 OPEN 상태 방 목록"""
         # 친구인지 확인

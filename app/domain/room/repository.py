@@ -233,3 +233,19 @@ class RoomParticipantRepository:
         db.commit()
         db.refresh(participant)
         return participant
+
+    @staticmethod
+    def list_rooms_by_participant(db: Session, user_id: int) -> List[Room]:
+        """사용자가 참여 중인 방 목록 (JOINED 상태, 본인이 방장이 아닌 방)"""
+        return (
+            db.query(Room)
+            .join(RoomParticipant, Room.id == RoomParticipant.room_id)
+            .filter(
+                RoomParticipant.user_id == user_id,
+                RoomParticipant.state == "JOINED",
+                Room.owner_user_id != user_id,  # 내가 만든 방 제외
+                Room.status != "DELETED",
+            )
+            .order_by(Room.created_at.desc())
+            .all()
+        )

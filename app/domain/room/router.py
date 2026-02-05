@@ -49,6 +49,20 @@ def list_my_rooms(
 
 
 @router.get(
+    "/participating",
+    response_model=BaseResponse[List[RoomResponse]],
+    summary="참여 중인 방 목록 조회",
+    description="내가 참여 중인 방 목록을 조회합니다. 내가 만든 방은 제외되며, 다른 사람이 만든 방에 입장한 경우만 표시됩니다.",
+)
+def list_participating_rooms(
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
+):
+    rooms = service.list_participating_rooms(db, user_id=user_id)
+    return BaseResponse.ok(rooms)
+
+
+@router.get(
     "/friends",
     response_model=BaseResponse[List[RoomResponse]],
     summary="친구들 방 목록 조회",
