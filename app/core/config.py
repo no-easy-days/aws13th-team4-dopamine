@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # Application
     APP_ENV: str = "development"
     DEBUG: bool = True
-    APP_TITLE: str = "Dopamine API"
+    APP_TITLE: str = "니가내 API"
     APP_VERSION: str = "1.0.0"
     NAVER_CLIENT_ID: str = ""
     NAVER_CLIENT_SECRET: str = ""
