@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.common.schemas import BaseResponse
+from app.core.auth import get_current_user_id
 from app.core.database import get_db
 from app.core.auth import get_current_user_id
 from app.domain.room.schemas import RoomCreate, RoomResponse, RoomDetailResponse, ParticipantResponse, ReadyRequest, ReadyResponse, GameResultInfo

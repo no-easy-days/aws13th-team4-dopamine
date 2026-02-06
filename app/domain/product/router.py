@@ -3,8 +3,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.core.auth import get_current_user_id
+from app.core.database import get_db
+<<<<<<< HEAD
+=======
+from app.core.auth import get_current_user_id
+>>>>>>> origin/main
 from app.domain.product import schemas
 from app.domain.product.service import NaverShoppingService, ProductService
 from app.domain.product.repository import ProductRepository
