@@ -9,6 +9,6 @@ class User(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     email = Column(String(255), nullable=False, unique=True)
     password_hash = Column(String(255), nullable=False)
-    nickname = Column(String(60), nullable=False)
+    nickname = Column(String(60), nullable=False, unique=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
