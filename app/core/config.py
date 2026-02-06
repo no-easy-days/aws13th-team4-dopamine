@@ -1,6 +1,5 @@
-﻿from functools import lru_cache
-
 from pydantic_settings import BaseSettings
+from functools import lru_cache
 
 
 class Settings(BaseSettings):
@@ -15,17 +14,9 @@ class Settings(BaseSettings):
     NAVER_CLIENT_ID: str = ""
     NAVER_CLIENT_SECRET: str = ""
 
-<<<<<<< HEAD
-    # JWT
-    JWT_SECRET: str = "change-me"
-    JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 14
-=======
     # JWT 설정 (실제 값은 .env에서 설정)
     JWT_SECRET_KEY: str = ""  # 필수: .env에서 설정
     JWT_EXPIRE_HOURS: int = 24
->>>>>>> origin/main
 
     class Config:
         env_file = ".env"
