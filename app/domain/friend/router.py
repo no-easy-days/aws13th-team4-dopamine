@@ -1,4 +1,4 @@
-﻿from typing import List
+from typing import List
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -6,6 +6,10 @@ from sqlalchemy.orm import Session
 from app.common.schemas import BaseResponse
 from app.core.auth import get_current_user_id
 from app.core.database import get_db
+<<<<<<< HEAD
+=======
+from app.core.auth import get_current_user_id
+>>>>>>> origin/main
 from app.domain.friend.schemas import FriendCreate, FriendListResponse, FriendResponse
 from app.domain.friend.service import FriendService
 from app.domain.wishlist.schemas import WishlistItemResponse

@@ -11,7 +11,7 @@ from app.domain.game.models import Game, GameResult, GamePayer
 from app.domain.game.repository import GameRepository, GameResultRepository, GamePayerRepository
 from app.domain.room.models import Room
 from app.domain.room.repository import RoomRepository, RoomParticipantRepository
-from app.domain.room.schemas import RoomCreate, ProductRoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest, GameResultInfo
+from app.domain.room.schemas import RoomCreate, ProductRoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest, GameResultInfo, ProductInfo
 from app.domain.wishlist.models import WishlistItem
 
 
@@ -59,28 +59,43 @@ class RoomService:
         return response
 
     def create_product_room(self, db: Session, user_id: int, product_id: int, payload: ProductRoomCreate) -> RoomResponse:
-        """상품 기반 방 생성 (PRODUCT_LADDER)"""
+        """상품 기반 방 생성 (PRODUCT_LADDER) - 단일 트랜잭션"""
         from app.domain.product.models import Product
 
-        # 상품 존재 확인
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            raise NotFoundException(message="Product not found")
+        try:
+            # 상품 존재 확인
+            product = db.query(Product).filter(Product.id == product_id).first()
+            if not product:
+                raise NotFoundException(message="Product not found")
 
-        # 방 생성
-        room = self.room_repository.create(
-            db,
-            room_type="PRODUCT_LADDER",
-            title=payload.title,
-            max_participants=payload.max_participants,
-            owner_user_id=user_id,
-            product_id=product_id,
-            gift_owner_user_id=None,  # PRODUCT_LADDER는 선물받는 대상이 미정
-        )
+            # 방 생성 (commit 없이)
+            room = self.room_repository.create_internal(
+                db,
+                room_type="PRODUCT_LADDER",
+                title=payload.title,
+                max_participants=payload.max_participants,
+                owner_user_id=user_id,
+                product_id=product_id,
+                gift_owner_user_id=None,
+            )
 
-        response = RoomResponse.model_validate(room)
-        response.current_participant_count = 0
-        return response
+            # PRODUCT_LADDER: 방장도 참여자로 자동 등록 (commit 없이)
+            self.participant_repository.create_internal(db, room.id, user_id, role="OWNER")
+
+            # 단일 커밋
+            db.commit()
+            db.refresh(room)
+
+            response = RoomResponse.model_validate(room)
+            response.current_participant_count = 1
+            return response
+
+        except NotFoundException:
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise BadRequestException(message="Failed to create room") from e
 
     def get_room_detail(self, db: Session, user_id: int, room_id: int) -> RoomDetailResponse:
         """방 상세 조회 (입장 화면)"""
@@ -108,6 +123,13 @@ class RoomService:
         response.participants = [ParticipantResponse.model_validate(p) for p in participants]
         response.current_participant_count = len(participants)
         response.current_ready_count = self.participant_repository.count_ready(db, room_id)
+
+        # 상품 정보 조회
+        if room.product_id:
+            from app.domain.product.models import Product
+            product = db.query(Product).filter(Product.id == room.product_id).first()
+            if product:
+                response.product = ProductInfo.model_validate(product)
 
         # 게임 완료 시 결과 포함
         if room.status == "DONE":
@@ -160,8 +182,8 @@ class RoomService:
         return response
 
     def list_my_rooms(self, db: Session, user_id: int) -> List[RoomResponse]:
-        """내가 만든 방 목록"""
-        rooms = self.room_repository.list_by_gift_owner(db, user_id)
+        """내가 만든 방 목록 (WISHLIST_GIFT + PRODUCT_LADDER 모두 포함)"""
+        rooms = self.room_repository.list_by_owner(db, user_id)
         return [self._to_room_response(db, room) for room in rooms]
 
     def list_friend_rooms(self, db: Session, user_id: int) -> List[RoomResponse]:
@@ -198,43 +220,67 @@ class RoomService:
         rooms = self.room_repository.list_by_product(db, product_id)
         return [self._to_room_response(db, room) for room in rooms]
 
+    def list_rooms_by_source_product(self, db: Session, product_id: int) -> List[RoomResponse]:
+        """같은 네이버 상품(source_product_id)의 모든 OPEN 상태 PRODUCT_LADDER 방 목록"""
+        from app.domain.product.models import Product
+
+        # product_id로 source, source_product_id 조회
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            return []
+
+        # source_product_id로 방 검색
+        rooms = self.room_repository.list_by_source_product(db, product.source, product.source_product_id)
+        return [self._to_room_response(db, room) for room in rooms]
+
     def join_room(self, db: Session, user_id: int, room_id: int) -> ParticipantResponse:
-        """방 입장"""
-        room = self.room_repository.get_by_id(db, room_id)
-        if not room:
-            raise NotFoundException(message="Room not found")
+        """방 입장 - 비관적 락으로 동시성 제어"""
+        try:
+            # 비관적 락으로 방 조회
+            room = self.room_repository.get_by_id_for_update(db, room_id)
+            if not room:
+                raise NotFoundException(message="Room not found")
 
-        if room.status != "OPEN":
-            raise BadRequestException(message="Room is not open")
+            if room.status != "OPEN":
+                raise BadRequestException(message="Room is not open")
 
-        # WISHLIST_GIFT: 방장은 입장 불가 (본인이 선물 받는 사람이므로)
-        # PRODUCT_LADDER: 방장도 참여 가능
-        if room.room_type == "WISHLIST_GIFT" and room.owner_user_id == user_id:
-            raise BadRequestException(message="Owner cannot join as participant")
+            # WISHLIST_GIFT: 방장은 입장 불가 (본인이 선물 받는 사람이므로)
+            # PRODUCT_LADDER: 방장도 참여 가능
+            if room.room_type == "WISHLIST_GIFT" and room.owner_user_id == user_id:
+                raise BadRequestException(message="Owner cannot join as participant")
 
-        # WISHLIST_GIFT: 친구인지 확인
-        # PRODUCT_LADDER: 누구나 입장 가능
-        if room.room_type == "WISHLIST_GIFT":
-            is_friend = self.friend_repository.get_by_owner_and_friend(
-                db, owner_user_id=user_id, friend_user_id=room.gift_owner_user_id
-            )
-            if not is_friend:
-                raise ForbiddenException(message="Only friends can join")
+            # WISHLIST_GIFT: 친구인지 확인
+            # PRODUCT_LADDER: 누구나 입장 가능
+            if room.room_type == "WISHLIST_GIFT":
+                is_friend = self.friend_repository.get_by_owner_and_friend(
+                    db, owner_user_id=user_id, friend_user_id=room.gift_owner_user_id
+                )
+                if not is_friend:
+                    raise ForbiddenException(message="Only friends can join")
 
-        # 기존 참여 기록 확인
-        existing = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
-        if existing:
-            if existing.state == "JOINED":
-                raise BadRequestException(message="Already joined")
-            # LEFT 상태면 재입장 처리
-            participant = self.participant_repository.rejoin(db, existing)
+            # 기존 참여 기록 확인
+            existing = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
+            if existing:
+                if existing.state == "JOINED":
+                    raise BadRequestException(message="Already joined")
+                # LEFT 상태면 재입장 처리 (commit 없이)
+                participant = self.participant_repository.rejoin_internal(db, existing)
+            else:
+                # 신규 입장 (commit 없이)
+                participant = self.participant_repository.create_internal(db, room_id, user_id, role="MEMBER")
+
+            db.commit()
+            db.refresh(participant)
             return ParticipantResponse.model_validate(participant)
 
-        # 신규 입장
-        participant = self.participant_repository.create(db, room_id, user_id, role="MEMBER")
-        return ParticipantResponse.model_validate(participant)
+        except (NotFoundException, BadRequestException, ForbiddenException):
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise BadRequestException(message="Failed to join room") from e
 
-    def set_ready(self, db: Session, user_id: int, room_id: int, is_ready: bool) -> Tuple[ParticipantResponse, Optional[GameResult]]:
+    def set_ready(self, db: Session, user_id: int, room_id: int, is_ready: bool) -> Tuple[ParticipantResponse, Optional[GameResult], Optional[List[int]]]:
         """레디 상태 변경. 정원이 다 차면 자동으로 사다리타기 시작."""
         try:
             # 비관적 락으로 방 조회 (동시성 제어)
@@ -262,19 +308,20 @@ class RoomService:
 
             # 정원이 다 찼는지 확인 후 자동 시작
             game_result = None
+            payer_user_ids = None
             if is_ready:
                 ready_count = self.participant_repository.count_ready(db, room_id)
                 if ready_count >= room.max_participants:
                     # 방 상태를 DONE으로 변경 (이미 락이 걸려있음)
                     room.status = "DONE"
                     db.flush()
-                    game_result = self._start_ladder_game_internal(db, room)
+                    game_result, payer_user_ids = self._start_ladder_game_internal(db, room)
 
             # 모든 작업 완료 후 커밋
             db.commit()
             db.refresh(participant)
 
-            return ParticipantResponse.model_validate(participant), game_result
+            return ParticipantResponse.model_validate(participant), game_result, payer_user_ids
 
         except (NotFoundException, BadRequestException, ForbiddenException):
             db.rollback()
@@ -283,7 +330,7 @@ class RoomService:
             db.rollback()
             raise BadRequestException(message="Failed to update ready status") from e
 
-    def _start_ladder_game_internal(self, db: Session, room: Room) -> GameResult:
+    def _start_ladder_game_internal(self, db: Session, room: Room) -> Tuple[GameResult, Optional[List[int]]]:
         """사다리타기 게임 시작 및 결과 생성 (트랜잭션 내부용 - commit 없음)"""
         # 레디한 참여자 목록
         participants = self.participant_repository.list_by_room(db, room.id, state="JOINED")
@@ -302,6 +349,7 @@ class RoomService:
                 recipient_user_id=room.gift_owner_user_id,
                 payer_user_id=payer.user_id,
             )
+            return game_result, None
         else:
             # PRODUCT_LADDER: 랜덤으로 당첨자(recipient) 선정, 나머지는 payer
             winner = random.choice(ready_participants)
@@ -313,10 +361,10 @@ class RoomService:
                 payer_user_id=None,
             )
             # 당첨자 제외 나머지를 payer로 등록
-            loser_user_ids = [p.user_id for p in ready_participants if p.user_id != winner.user_id]
-            self._create_game_payers_internal(db, game_result.id, loser_user_ids)
+            payer_user_ids = [p.user_id for p in ready_participants if p.user_id != winner.user_id]
+            self._create_game_payers_internal(db, game_result.id, payer_user_ids)
 
-        return game_result
+            return game_result, payer_user_ids
 
     def _create_game_internal(self, db: Session, room_id: int) -> Game:
         """Game 생성 (트랜잭션 내부용 - commit 없음)"""
@@ -364,32 +412,53 @@ class RoomService:
         db.flush()
 
     def leave_room(self, db: Session, user_id: int, room_id: int) -> None:
-        """방 나가기 (레디 여부 상관없이 가능, 게임 진행/완료 시 불가)"""
-        room = self.room_repository.get_by_id(db, room_id)
-        if not room:
-            raise NotFoundException(message="Room not found")
+        """방 나가기 - 비관적 락으로 동시성 제어"""
+        try:
+            # 비관적 락으로 방 조회
+            room = self.room_repository.get_by_id_for_update(db, room_id)
+            if not room:
+                raise NotFoundException(message="Room not found")
 
-        if room.status in ("RUNNING", "DONE"):
-            raise BadRequestException(message="Cannot leave after game started")
+            if room.status in ("RUNNING", "DONE"):
+                raise BadRequestException(message="Cannot leave after game started")
 
-        # 참여자인지 확인
-        participant = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
-        if not participant or participant.state != "JOINED":
-            raise BadRequestException(message="Not a participant")
+            # 참여자인지 확인
+            participant = self.participant_repository.get_by_room_and_user(db, room_id, user_id)
+            if not participant or participant.state != "JOINED":
+                raise BadRequestException(message="Not a participant")
 
-        # 나가기 (레디 상태였으면 is_ready=False로 변경됨 → 레디 카운트 자동 감소)
-        self.participant_repository.leave(db, participant)
+            # 나가기 (commit 없이)
+            self.participant_repository.leave_internal(db, participant)
+            db.commit()
+
+        except (NotFoundException, BadRequestException):
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise BadRequestException(message="Failed to leave room") from e
 
     def delete_room(self, db: Session, user_id: int, room_id: int) -> None:
-        """방 삭제 (방장만 가능)"""
-        room = self.room_repository.get_by_id(db, room_id)
-        if not room:
-            raise NotFoundException(message="Room not found")
+        """방 삭제 - 비관적 락으로 동시성 제어"""
+        try:
+            # 비관적 락으로 방 조회
+            room = self.room_repository.get_by_id_for_update(db, room_id)
+            if not room:
+                raise NotFoundException(message="Room not found")
 
-        if room.owner_user_id != user_id:
-            raise ForbiddenException(message="Only the owner can delete the room")
+            if room.owner_user_id != user_id:
+                raise ForbiddenException(message="Only the owner can delete the room")
 
-        if room.status == "RUNNING":
-            raise BadRequestException(message="Cannot delete a running room")
+            if room.status in ("RUNNING", "DONE"):
+                raise BadRequestException(message="Cannot delete after game started")
 
-        self.room_repository.soft_delete(db, room)
+            # 삭제 (commit 없이)
+            self.room_repository.soft_delete_internal(db, room)
+            db.commit()
+
+        except (NotFoundException, ForbiddenException, BadRequestException):
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise BadRequestException(message="Failed to delete room") from e

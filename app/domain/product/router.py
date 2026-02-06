@@ -1,10 +1,14 @@
-﻿import math
+import math
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user_id
 from app.core.database import get_db
+<<<<<<< HEAD
+=======
+from app.core.auth import get_current_user_id
+>>>>>>> origin/main
 from app.domain.product import schemas
 from app.domain.product.service import NaverShoppingService, ProductService
 from app.domain.product.repository import ProductRepository
@@ -180,10 +184,10 @@ def create_product_room(
 
 
 @router.get("/{product_id}/rooms", response_model=List[RoomResponse])
-# 상품 기반 방 목록 조회
+# 상품 기반 방 목록 조회 (같은 네이버 상품의 모든 방 조회)
 def list_product_rooms(
     product_id: int,
     db: Session = Depends(get_db),
 ):
     room_service = RoomService()
-    return room_service.list_rooms_by_product(db, product_id)
+    return room_service.list_rooms_by_source_product(db, product_id)

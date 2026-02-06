@@ -22,10 +22,24 @@ class RoomRepository:
 
     @staticmethod
     def list_by_gift_owner(db: Session, gift_owner_user_id: int) -> List[Room]:
+        """WISHLIST_GIFT 방 조회용 (gift_owner_user_id 기준)"""
         return (
             db.query(Room)
             .filter(
                 Room.gift_owner_user_id == gift_owner_user_id,
+                Room.status != "DELETED",
+            )
+            .order_by(Room.created_at.desc())
+            .all()
+        )
+
+    @staticmethod
+    def list_by_owner(db: Session, owner_user_id: int) -> List[Room]:
+        """내가 만든 모든 방 조회 (owner_user_id 기준)"""
+        return (
+            db.query(Room)
+            .filter(
+                Room.owner_user_id == owner_user_id,
                 Room.status != "DELETED",
             )
             .order_by(Room.created_at.desc())
@@ -75,6 +89,23 @@ class RoomRepository:
         )
 
     @staticmethod
+    def list_by_source_product(db: Session, source: str, source_product_id: str) -> List[Room]:
+        """같은 원본 상품(source + source_product_id)의 OPEN 상태 PRODUCT_LADDER 방 목록 조회"""
+        from app.domain.product.models import Product
+        return (
+            db.query(Room)
+            .join(Product, Room.product_id == Product.id)
+            .filter(
+                Product.source == source,
+                Product.source_product_id == source_product_id,
+                Room.status == "OPEN",
+                Room.room_type == "PRODUCT_LADDER",
+            )
+            .order_by(Room.created_at.desc())
+            .all()
+        )
+
+    @staticmethod
     def create(
         db: Session,
         room_type: str,
@@ -99,6 +130,33 @@ class RoomRepository:
         db.add(room)
         db.commit()
         db.refresh(room)
+        return room
+
+    @staticmethod
+    def create_internal(
+        db: Session,
+        room_type: str,
+        title: Optional[str],
+        max_participants: int,
+        owner_user_id: int,
+        product_id: int,
+        gift_owner_user_id: Optional[int],
+    ) -> Room:
+        """트랜잭션 내부용 - commit 없음"""
+        join_code = secrets.token_urlsafe(16)
+        room = Room(
+            room_type=room_type,
+            title=title,
+            status="OPEN",
+            max_participants=max_participants,
+            is_auto_start=True,
+            join_code=join_code,
+            owner_user_id=owner_user_id,
+            product_id=product_id,
+            gift_owner_user_id=gift_owner_user_id,
+        )
+        db.add(room)
+        db.flush()
         return room
 
     @staticmethod
@@ -129,6 +187,15 @@ class RoomRepository:
         room.deleted_at = datetime.utcnow()
         db.commit()
         db.refresh(room)
+        return room
+
+    @staticmethod
+    def soft_delete_internal(db: Session, room: Room) -> Room:
+        """트랜잭션 내부용 - commit 없음"""
+        from datetime import datetime
+        room.status = "DELETED"
+        room.deleted_at = datetime.utcnow()
+        db.flush()
         return room
 
 
@@ -206,6 +273,20 @@ class RoomParticipantRepository:
         return participant
 
     @staticmethod
+    def create_internal(db: Session, room_id: int, user_id: int, role: str) -> RoomParticipant:
+        """트랜잭션 내부용 - commit 없음"""
+        participant = RoomParticipant(
+            room_id=room_id,
+            user_id=user_id,
+            role=role,
+            state="JOINED",
+            is_ready=False,
+        )
+        db.add(participant)
+        db.flush()
+        return participant
+
+    @staticmethod
     def update_ready(db: Session, participant: RoomParticipant, is_ready: bool) -> RoomParticipant:
         participant.is_ready = is_ready
         db.commit()
@@ -223,6 +304,16 @@ class RoomParticipantRepository:
         return participant
 
     @staticmethod
+    def leave_internal(db: Session, participant: RoomParticipant) -> RoomParticipant:
+        """트랜잭션 내부용 - commit 없음"""
+        from datetime import datetime
+        participant.state = "LEFT"
+        participant.is_ready = False
+        participant.left_at = datetime.utcnow()
+        db.flush()
+        return participant
+
+    @staticmethod
     def rejoin(db: Session, participant: RoomParticipant) -> RoomParticipant:
         """LEFT 상태의 참여자를 다시 JOINED로 변경"""
         from datetime import datetime
@@ -232,6 +323,17 @@ class RoomParticipantRepository:
         participant.left_at = None
         db.commit()
         db.refresh(participant)
+        return participant
+
+    @staticmethod
+    def rejoin_internal(db: Session, participant: RoomParticipant) -> RoomParticipant:
+        """트랜잭션 내부용 - commit 없음"""
+        from datetime import datetime
+        participant.state = "JOINED"
+        participant.is_ready = False
+        participant.joined_at = datetime.utcnow()
+        participant.left_at = None
+        db.flush()
         return participant
 
     @staticmethod

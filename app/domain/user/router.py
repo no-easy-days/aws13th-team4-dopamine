@@ -45,8 +45,8 @@ async def signup(
     "/login",
     response_model=BaseResponse[LoginResponse],
     status_code=status.HTTP_200_OK,
-    summary="Login",
-    description="Authenticate with email and password and return an access token.",
+    summary="로그인",
+    description="이메일과 비밀번호로 로그인합니다. 성공 시 JWT 액세스 토큰을 반환합니다.",
 )
 async def login(
     data: UserLogin,

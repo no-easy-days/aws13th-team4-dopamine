@@ -95,16 +95,3 @@ class LoginResponse(BaseModel):
     user_id: int
     access_token: str
     token_type: str = "bearer"
-    expires_in: int
-    refresh_token: str
-    refresh_expires_in: int
-
-
-class TokenRefreshRequest(BaseModel):
-    refresh_token: str = Field(..., min_length=1)
-
-
-class TokenRefreshResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int

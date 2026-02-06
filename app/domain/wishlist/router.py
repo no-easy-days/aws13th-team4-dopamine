@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.common.schemas import BaseResponse
 from app.core.auth import get_current_user_id
 from app.core.database import get_db
+from app.core.auth import get_current_user_id
 from app.domain.wishlist.schemas import WishlistCreate, WishlistItemResponse
 from app.domain.wishlist.service import WishlistService
 
