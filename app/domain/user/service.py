@@ -8,11 +8,8 @@ from app.core.config import settings
 from app.core.exceptions import UnauthorizedException
 from app.domain.user import schemas
 from app.domain.user.repository import UserRepository
-<<<<<<< HEAD
-=======
 from app.core.exceptions import UnauthorizedException
 from app.core.auth import create_access_token
->>>>>>> origin/main
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
