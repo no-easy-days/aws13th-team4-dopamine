@@ -11,7 +11,7 @@ from app.domain.game.models import Game, GameResult, GamePayer
 from app.domain.game.repository import GameRepository, GameResultRepository, GamePayerRepository
 from app.domain.room.models import Room
 from app.domain.room.repository import RoomRepository, RoomParticipantRepository
-from app.domain.room.schemas import RoomCreate, ProductRoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest, GameResultInfo, ProductInfo
+from app.domain.room.schemas import RoomCreate, ProductRoomCreate, RoomDetailResponse, RoomResponse, ParticipantResponse, ReadyRequest, GameResultInfo, ProductInfo, UserInfo
 from app.domain.wishlist.models import WishlistItem
 
 
@@ -97,6 +97,14 @@ class RoomService:
             db.rollback()
             raise BadRequestException(message="Failed to create room") from e
 
+    def _get_user_nickname_map(self, db: Session, user_ids: list[int]) -> dict[int, str]:
+        """유저 ID 목록에서 닉네임 맵 조회"""
+        from app.domain.user.models import User
+        if not user_ids:
+            return {}
+        users = db.query(User.id, User.nickname).filter(User.id.in_(user_ids)).all()
+        return {u.id: u.nickname for u in users}
+
     def get_room_detail(self, db: Session, user_id: int, room_id: int) -> RoomDetailResponse:
         """방 상세 조회 (입장 화면)"""
         room = self.room_repository.get_by_id(db, room_id)
@@ -119,10 +127,30 @@ class RoomService:
         # 참여자 목록
         participants = self.participant_repository.list_by_room(db, room_id, state="JOINED")
 
+        # 닉네임 조회를 위한 user_id 수집
+        all_user_ids = [p.user_id for p in participants]
+        all_user_ids.append(room.owner_user_id)
+        if room.gift_owner_user_id:
+            all_user_ids.append(room.gift_owner_user_id)
+
         response = RoomDetailResponse.model_validate(room)
-        response.participants = [ParticipantResponse.model_validate(p) for p in participants]
+
+        # 참여자에 닉네임 추가
+        nickname_map = self._get_user_nickname_map(db, list(set(all_user_ids)))
+        participant_responses = []
+        for p in participants:
+            pr = ParticipantResponse.model_validate(p)
+            pr.nickname = nickname_map.get(p.user_id)
+            participant_responses.append(pr)
+
+        response.participants = participant_responses
         response.current_participant_count = len(participants)
         response.current_ready_count = self.participant_repository.count_ready(db, room_id)
+
+        # 방장/선물받는사람 닉네임 추가
+        response.owner_nickname = nickname_map.get(room.owner_user_id)
+        if room.gift_owner_user_id:
+            response.gift_owner_nickname = nickname_map.get(room.gift_owner_user_id)
 
         # 상품 정보 조회
         if room.product_id:
@@ -140,6 +168,11 @@ class RoomService:
                     ready_participants = [p for p in participants if p.is_ready]
                     participant_user_ids = [p.user_id for p in ready_participants]
 
+                    # 게임 결과용 닉네임 조회
+                    result_user_ids = [game_result.recipient_user_id]
+                    if game_result.payer_user_id:
+                        result_user_ids.append(game_result.payer_user_id)
+
                     if room.room_type == "WISHLIST_GIFT":
                         # WISHLIST_GIFT: 방장은 참여자 목록만, 참여자는 당첨자만
                         is_recipient = user_id == room.gift_owner_user_id
@@ -148,6 +181,7 @@ class RoomService:
                                 game_id=game_result.game_id,
                                 payer_user_id=None,
                                 recipient_user_id=game_result.recipient_user_id,
+                                recipient_nickname=nickname_map.get(game_result.recipient_user_id),
                                 product_id=game_result.product_id,
                                 participant_user_ids=participant_user_ids,
                             )
@@ -155,7 +189,9 @@ class RoomService:
                             response.game_result = GameResultInfo(
                                 game_id=game_result.game_id,
                                 payer_user_id=game_result.payer_user_id,
+                                payer_nickname=nickname_map.get(game_result.payer_user_id),
                                 recipient_user_id=game_result.recipient_user_id,
+                                recipient_nickname=nickname_map.get(game_result.recipient_user_id),
                                 product_id=game_result.product_id,
                                 participant_user_ids=[],
                             )
@@ -164,13 +200,23 @@ class RoomService:
                         # payer_user_ids는 game_payers 테이블에서 조회
                         payers = self.game_payer_repository.list_by_game_result(db, game_result.id)
                         payer_user_ids = [p.user_id for p in payers]
+
+                        # 결제자들 닉네임 조회
+                        payer_nickname_map = self._get_user_nickname_map(db, payer_user_ids)
+                        payers_info = [
+                            UserInfo(user_id=uid, nickname=payer_nickname_map.get(uid, f"User #{uid}"))
+                            for uid in payer_user_ids
+                        ]
+
                         response.game_result = GameResultInfo(
                             game_id=game_result.game_id,
                             payer_user_id=None,
                             recipient_user_id=game_result.recipient_user_id,
+                            recipient_nickname=nickname_map.get(game_result.recipient_user_id),
                             product_id=game_result.product_id,
                             participant_user_ids=participant_user_ids,
                             payer_user_ids=payer_user_ids,
+                            payers=payers_info,
                         )
 
         return response
