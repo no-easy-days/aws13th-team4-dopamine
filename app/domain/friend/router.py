@@ -35,7 +35,7 @@ def add_friend(
     - 상대방의 방을 보려면 상대방을 친구로 등록해야 함
     """
     friend = service.add_friend(
-        db, owner_user_id=user_id, friend_user_id=payload.friend_user_id
+        db, owner_user_id=user_id, friend_nickname=payload.friend_nickname
     )
     return BaseResponse.ok(FriendResponse.model_validate(friend))
 

@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class FriendCreate(BaseModel):
-    friend_user_id: int = Field(..., gt=0)
+    friend_nickname: str = Field(..., min_length=2, max_length=30)
 
 
 class FriendResponse(BaseModel):
